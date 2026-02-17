@@ -55,6 +55,7 @@ DEP_FILES = {
     "Libxml": "libxml_deps.csv",
 }
 
+
 def _load_tables(data_dir: Path, names: List[str]) -> Tuple[Dict[str, pd.DataFrame], Dict[str, pd.DataFrame]]:
     datasets: Dict[str, pd.DataFrame] = {}
     deps: Dict[str, pd.DataFrame] = {}
@@ -104,6 +105,7 @@ def run_gaer_one(
     t_cluster = time.perf_counter()
 
     df_row.insert(0, "Dataset", name)
+    df_row["Pipeline"] = "GAER"
     df_row["Encoder"] = encoder
     df_row["GAE_loss"] = logs.get("loss")
     df_row["build_data_time(sec)"] = round(t_build - t0, 4)
@@ -111,8 +113,9 @@ def run_gaer_one(
     df_row["Cluster_time(sec)"] = round(t_cluster - t_train, 4)
     df_row["Total_time(sec)"] = round(t_cluster - t0, 4)
 
+    # keep JSON small if not saving labels
     if not save_labels:
-        out.pop("labels", None)
+        out = {}
 
     return df_row, out
 
@@ -143,6 +146,7 @@ def run_negar_one(
     t_cluster = time.perf_counter()
 
     df_row.insert(0, "Dataset", name)
+    df_row["Pipeline"] = "NEGAR"
     df_row["Node2Vec_dim"] = n2v.dimensions
     df_row["build_data_time(sec)"] = round(t_build - t0, 4)
     df_row["Train_time(sec)"] = round(t_embed - t_build, 4)
@@ -150,7 +154,7 @@ def run_negar_one(
     df_row["Total_time(sec)"] = round(t_cluster - t0, 4)
 
     if not save_labels:
-        out.pop("labels", None)
+        out = {}
 
     return df_row, out
 
@@ -165,13 +169,13 @@ def main() -> None:
     p.add_argument("--no_eval", action="store_true")
     p.add_argument("--k_min", type=int, default=10)
     p.add_argument("--k_max", type=int, default=30)
-    p.add_argument("--sample_size", type=int, default=1000)
+    p.add_argument("--sample_size", type=int, default=2000)
     p.add_argument("--user_k", type=int, default=None)
 
     # GAER defaults
     p.add_argument("--encoder", type=str, choices=["gat", "gcn"], default="gat")
-    p.add_argument("--epochs", type=int, default=30)
-    p.add_argument("--hidden", type=int, default=64)
+    p.add_argument("--epochs", type=int, default=5)
+    p.add_argument("--hidden", type=int, default=16)
     p.add_argument("--dropout", type=float, default=0.0)
     p.add_argument("--lr", type=float, default=1e-4)
 
@@ -206,6 +210,7 @@ def main() -> None:
     )
 
     do_eval = not bool(args.no_eval)
+
     cpu_count = os.cpu_count() or 1
     safe_cap = max(1, min(4, cpu_count - 1))
     requested = int(args.n2v_workers)
@@ -214,8 +219,8 @@ def main() -> None:
     else:
         n2v_workers = max(1, min(requested, safe_cap))
 
-    rows = []
-    labels_dump = {}
+    rows: List[pd.DataFrame] = []
+    labels_dump: Dict[str, Dict] = {}
 
     if args.pipeline in {"gaer", "both"}:
         iterator = tqdm(names, desc="GAER", unit="dataset") if tqdm else names
@@ -238,7 +243,9 @@ def main() -> None:
                 save_labels=args.save_labels,
             )
             rows.append(df_row)
-            labels_dump[f"GAER::{name}"] = out
+
+            if args.save_labels:
+                labels_dump[f"GAER::{name}"] = out
 
     if args.pipeline in {"negar", "both"}:
         iterator = tqdm(names, desc="NEGAR", unit="dataset") if tqdm else names
@@ -246,11 +253,9 @@ def main() -> None:
             if not tqdm:
                 print(f"[NEGAR] {name} ...")
 
-            # FIX: name exists here, so compute size here
             n_points = int(datasets[name].shape[0])
             is_big = n_points > 5000
 
-            # FIX: build Node2Vec per dataset (big ones get cheaper params)
             n2v = Node2VecModel(
                 dimensions=int(args.n2v_dim),
                 walk_length=int(args.n2v_walk_length),
@@ -274,10 +279,13 @@ def main() -> None:
                 save_labels=args.save_labels,
             )
             rows.append(df_row)
-            labels_dump[f"NEGAR::{name}"] = out
+
+            if args.save_labels:
+                labels_dump[f"NEGAR::{name}"] = out
 
     results = pd.concat(rows, ignore_index=True) if rows else pd.DataFrame()
     tag = _now_tag()
+
     out_csv = out_dir / f"results_{args.pipeline}_{tag}.csv"
     results.to_csv(out_csv, index=False)
 
