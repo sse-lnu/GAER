@@ -35,7 +35,9 @@ class ClusterAndEval:
             return data.df["Label"].to_numpy(dtype=int)
         return None
 
-
+    def _labels_to_dict(self, nodes: List[str], labels: np.ndarray) -> Dict[str, int]:
+        return {str(nodes[i]): int(labels[i]) for i in range(len(nodes))}
+    
     def _get_deps(self, data) -> Optional[pd.DataFrame]:
         if hasattr(data, "df_dep") and isinstance(data.df_dep, pd.DataFrame):
             return data.df_dep
@@ -132,9 +134,9 @@ class ClusterAndEval:
 
         nodes = self._get_nodes(data, n)
         if user_k is None:
-            k_used, diag_df = self._best_k_elbow(X)
+            k_used, _ = self._best_k_elbow(X)
         else:
-            k_used, diag_df = int(user_k), pd.DataFrame()
+            k_used, _ = int(user_k), pd.DataFrame()
 
         labels = self._fit_labels(X, k_used, clustering)
 
@@ -144,7 +146,10 @@ class ClusterAndEval:
             "Clusters": int(len(np.unique(labels))),
         }
 
-        out: Dict[str, Any] = {"labels": labels.tolist(), "k_used": int(k_used), "k_search": diag_df}
+        out: Dict[str, Any] = {
+            "labels": self._labels_to_dict(nodes, labels),
+            "Recovered_Clusters": int(k_used),
+        }
 
         if do_eval:
             y_true = self._get_y_true(data, n)
