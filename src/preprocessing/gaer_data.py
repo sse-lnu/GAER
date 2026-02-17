@@ -45,10 +45,20 @@ def infer_language_from_files(files: pd.Series) -> str:
     return mapping.get(ext, "java")
 
 
-def strip_extension(path: str) -> str:
-    s = str(path)
-    i = s.rfind(".")
-    return s[:i] if i > 0 else s
+def strip_extension(path: str, lang: str) -> str:
+    s = str(path).replace("\\", "/")
+    dir_part, name = s.rsplit("/", 1) if "/" in s else ("", s)
+    parts = name.split(".")
+    lang = (lang or "java").lower()
+    if lang == "java":
+        new_name = ".".join(parts[:-1]) if len(parts) > 1 else name
+
+    elif lang in ("c", "c++", "cpp"):
+        new_name = ".".join(parts[:-2]) if len(parts) > 2 else name
+    else:
+        new_name = ".".join(parts[:-1]) if len(parts) > 1 else name
+
+    return f"{dir_part}/{new_name}" if dir_part else new_name
 
 
 class HeterogeneousData(HeteroData):
@@ -155,9 +165,10 @@ class HeterogeneousData(HeteroData):
             self._w2v_dim = 0
             self._file_w2v = {}
 
-        nodes_names = self.df["File"].astype(str).map(strip_extension)
-        loc_vec = CountVectorizer(binary=True)
-        loc_features = loc_vec.fit_transform(nodes_names).toarray()
+        lang = infer_language_from_files(self.df["File"])
+        base_names = self.df["File"].astype(str).map(lambda p: strip_extension(p, lang))
+        loc_vec = CountVectorizer(binary=False)
+        loc_features = loc_vec.fit_transform(base_names).toarray()
 
         if self._w2v_dim > 0:
             zero = np.zeros(self._w2v_dim, dtype=np.float32)
