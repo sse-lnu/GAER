@@ -82,70 +82,61 @@ class HeterogeneousData(HeteroData):
         self._create_edges()
 
     def _clean_tables(self) -> None:
-        if "File" not in self.df.columns:
-            raise ValueError("df must contain a 'File' column.")
+        if "Entity" not in self.df.columns:
+            self.df["Entity"] = self.df["File"].astype(str).str.replace("/", ".", regex=False)
 
-        nodes = self.df.copy()
-        nodes["File"] = nodes["File"].astype(str)
+        if "Code" not in self.df.columns:
+            if "Member_Name" in self.df.columns:
+                code_map = (
+                    self.df.groupby("File")["Member_Name"]
+                    .apply(lambda s: " ".join(sorted(set(str(x) for x in s if pd.notna(x) and str(x).strip()))))
+                    .to_dict()
+                )
+                self.df["Code"] = self.df["File"].map(code_map).fillna("")
+            else:
+                self.df["Code"] = ""
 
-        if "Member_Name" in nodes.columns:
-            nodes["Member_Name"] = nodes["Member_Name"].fillna("").astype(str).str.strip()
-            nodes = nodes[nodes["Member_Name"] != ""]
-            code_df = (
-                nodes.groupby("File", as_index=False)["Member_Name"]
-                .apply(lambda s: " ".join(s.tolist()))
-                .rename(columns={"Member_Name": "Code"})
-            )
-        else:
-            code_df = pd.DataFrame({"File": nodes["File"].drop_duplicates(), "Code": ""})
+        keep_cols = [c for c in ["Entity", "Module", "Duplicated", "Code"] if c in self.df.columns]
+        agg = (
+            self.df.groupby(["File"], as_index=False)
+            .agg({
+                **{k: "first" for k in keep_cols},
+                "Module": lambda s: sorted(set([x for x in s if pd.notna(x)]))
+            })
+        )
 
-        if "Module" in nodes.columns:
-            nodes["Module"] = nodes["Module"].fillna("").astype(str)
-            mod_df = (
-                nodes.groupby("File", as_index=False)["Module"]
-                .apply(lambda s: sorted({m for m in s.tolist() if m and m.lower() != "nan"}))
-                .rename(columns={"Module": "Module_List"})
-            )
-        else:
-            mod_df = pd.DataFrame({"File": nodes["File"].drop_duplicates(), "Module_List": [["__none__"]]})
+        empty = agg["Module"].str.len() == 0
+        if empty.any():
+            agg.loc[empty, "Module"] = [["__none__"]] * int(empty.sum())
 
-        out = nodes[["File"]].drop_duplicates()
-        out = pd.merge(out, mod_df, on="File", how="left")
-        out = pd.merge(out, code_df, on="File", how="left")
+        agg["Duplicated"] = agg["Module"].str.len().gt(1)
+        agg["Module_List"] = agg["Module"]
+        agg["Module"] = agg["Module"].apply(lambda xs: xs[0])
 
-        out["Module_List"] = out["Module_List"].apply(lambda xs: xs if xs else ["__none__"])
-        out["Duplicated"] = out["Module_List"].str.len().gt(1)
-        out["Module"] = out["Module_List"].apply(lambda xs: xs[0] if xs else "__none__")
-        out["Entity"] = out["File"]
-        out["File_ID"] = range(len(out))
-
-        self.df = out.reset_index(drop=True)
-        self.has_multilabels = bool(self.df["Duplicated"].any())
-
+        self.df = agg.dropna(subset=["File"]).drop_duplicates(subset=["File"]).reset_index(drop=True)
+        valid_files = set(self.df["File"].astype(str))
         dep = self.df_dep.copy()
-        if dep is None or dep.empty:
-            self.df_dep = pd.DataFrame(columns=["Source_File", "Target_File", "Source_ID", "Target_ID", "Dependency_Type"])
-            return
 
-        if "Source_File" not in dep.columns or "Target_File" not in dep.columns:
-            raise ValueError("df_dep must contain 'Source_File' and 'Target_File' columns.")
+        if "Dependency_Count" not in dep.columns:
+            dep["Dependency_Count"] = 1.0
+        if "Dependency_Type" not in dep.columns:
+            dep["Dependency_Type"] = "__dep__"
 
         dep["Source_File"] = dep["Source_File"].astype(str)
         dep["Target_File"] = dep["Target_File"].astype(str)
-        dep = dep[dep["Source_File"] != dep["Target_File"]]
-        dep = dep.drop_duplicates(subset=["Source_File", "Target_File"]).reset_index(drop=True)
-
-        if "Dependency_Type" not in dep.columns:
-            dep["Dependency_Type"] = "__dep__"
         dep["Dependency_Type"] = dep["Dependency_Type"].fillna("__dep__").astype(str)
+        dep["Dependency_Count"] = pd.to_numeric(dep["Dependency_Count"], errors="coerce").fillna(1.0)
+
+        dep = dep[dep["Source_File"].isin(valid_files) & dep["Target_File"].isin(valid_files)]
         dep = dep[~dep["Dependency_Type"].str.contains("possible", case=False, na=False)]
 
-        valid = set(self.df["File"].astype(str))
-        dep = dep[dep["Source_File"].isin(valid) & dep["Target_File"].isin(valid)].reset_index(drop=True)
+        dep = dep.groupby(["Source_File", "Target_File", "Dependency_Type"], as_index=False)["Dependency_Count"].sum()
 
-        idx = dict(zip(self.df["File"].astype(str), self.df["File_ID"].astype(int)))
-        dep["Source_ID"] = dep["Source_File"].map(idx)
-        dep["Target_ID"] = dep["Target_File"].map(idx)
+        self.df["File_ID"] = range(len(self.df))
+        idx_map = dict(zip(self.df["File"].astype(str), self.df["File_ID"].astype(int)))
+
+        dep["Source_ID"] = dep["Source_File"].map(idx_map)
+        dep["Target_ID"] = dep["Target_File"].map(idx_map)
         dep = dep.dropna(subset=["Source_ID", "Target_ID"])
         dep[["Source_ID", "Target_ID"]] = dep[["Source_ID", "Target_ID"]].astype(int)
 
@@ -159,13 +150,13 @@ class HeterogeneousData(HeteroData):
         if emb_map:
             self._w2v_dim = next(iter(emb_map.values())).shape[0]
             zero = np.zeros(self._w2v_dim, dtype=np.float32)
-            self._file_w2v = {f: emb_map.get(f, zero) for f in self.df["File"].astype(str)}
+            self._file_w2v = {f: emb_map.get(e, zero) for f, e in zip(self.df["File"].astype(str), self.df["Entity"].astype(str))}
         else:
             self._w2v_dim = 0
             self._file_w2v = {}
 
         nodes_names = self.df["File"].astype(str).map(strip_extension)
-        loc_vec = CountVectorizer(binary=False)
+        loc_vec = CountVectorizer(binary=True)
         loc_features = loc_vec.fit_transform(nodes_names).toarray()
 
         if self._w2v_dim > 0:
