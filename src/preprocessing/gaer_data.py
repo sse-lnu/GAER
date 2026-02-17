@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from typing import Dict, List, Optional, Tuple
-
+import re
 import numpy as np
 import pandas as pd
 import torch
@@ -43,23 +43,6 @@ def infer_language_from_files(files: pd.Series) -> str:
         ".swift": "swift",
     }
     return mapping.get(ext, "java")
-
-
-def strip_extension(path: str, lang: str) -> str:
-    s = str(path).replace("\\", "/")
-    dir_part, name = s.rsplit("/", 1) if "/" in s else ("", s)
-    parts = name.split(".")
-    lang = (lang or "java").lower()
-    if lang == "java":
-        new_name = ".".join(parts[:-1]) if len(parts) > 1 else name
-
-    elif lang in ("c", "c++", "cpp"):
-        new_name = ".".join(parts[:-2]) if len(parts) > 2 else name
-    else:
-        new_name = ".".join(parts[:-1]) if len(parts) > 1 else name
-
-    return f"{dir_part}/{new_name}" if dir_part else new_name
-
 
 class HeterogeneousData(HeteroData):
     def __init__(
@@ -152,25 +135,51 @@ class HeterogeneousData(HeteroData):
 
         self.df_dep = dep.reset_index(drop=True)
 
-
     def _create_node_features(self) -> None:
-        gen = W2VEmbeddingGenerator(self.df[["Entity", "Code"]], max_df=self.max_df)
+        base = self.df[["File", "Entity", "Code"]].copy()
+        base["File"] = base["File"].astype(str)
+        base["Entity"] = base["Entity"].astype(str)
+        base["Code"] = base["Code"].fillna("").astype(str)
+
+        gen = W2VEmbeddingGenerator(base[["Entity", "Code"]], max_df=self.max_df)
         emb_map = gen.generate(**self.w2v_params)
 
         if emb_map:
             self._w2v_dim = next(iter(emb_map.values())).shape[0]
             zero = np.zeros(self._w2v_dim, dtype=np.float32)
-            self._file_w2v = {f: emb_map.get(e, zero) for f, e in zip(self.df["File"].astype(str), self.df["Entity"].astype(str))}
-        else:
-            self._w2v_dim = 0
+
+            file2ents = base.groupby("File")["Entity"].apply(list).to_dict()
             self._file_w2v = {}
+            for f, ents in file2ents.items():
+                vecs = [emb_map.get(e, zero) for e in ents if e in emb_map]
+                self._file_w2v[f] = np.mean(vecs, axis=0).astype(np.float32) if vecs else zero
+        else:
+            self._file_w2v, self._w2v_dim = {}, 0
+
+        def trim_without_ext(path: str, lang: str) -> str:
+            s = str(path).replace("\\", "/").lower()
+            lang = (lang or "java").lower()
+            s_noext = s.rsplit(".", 1)[0] if "." in s else s
+
+            if lang == "java":
+                dir_part = s_noext.rsplit("/", 1)[0] if "/" in s_noext else ""
+                toks = [t for t in dir_part.split("/") if t]
+                return " ".join(toks)
+
+            if lang in ("c", "cpp", "c++"):
+                toks = [t for t in re.split(r"[/\.]+", s_noext) if t]
+                return " ".join(toks)
+
+            dir_part = s_noext.rsplit("/", 1)[0] if "/" in s_noext else ""
+            toks = [t for t in dir_part.split("/") if t]
+            return " ".join(toks)
 
         lang = infer_language_from_files(self.df["File"])
-        base_names = self.df["File"].astype(str).map(lambda p: strip_extension(p, lang))
-        loc_vec = CountVectorizer(binary=False)
-        loc_features = loc_vec.fit_transform(base_names).toarray()
+        base_names = self.df["File"].astype(str).map(lambda s: trim_without_ext(s, lang))
 
-        if self._w2v_dim > 0:
+        loc_vectorizer = CountVectorizer(binary=True)
+        loc_features = loc_vectorizer.fit_transform(base_names).toarray()
+        if self._w2v_dim > 0 and self._file_w2v:
             zero = np.zeros(self._w2v_dim, dtype=np.float32)
             code_features = np.vstack([self._file_w2v.get(f, zero) for f in self.df["File"].astype(str)])
             code_features = normalize(code_features, norm="l2")
@@ -179,11 +188,13 @@ class HeterogeneousData(HeteroData):
             features = loc_features
 
         self["entity"].x = torch.tensor(features, dtype=torch.float)
-        self.nodes = self.df.File
+        self.nodes = self.df["File"]
+
         all_mods = sorted({m for xs in self.df["Module_List"] for m in (xs or [])}) or ["__none__"]
         self.label_encoder = LabelEncoder().fit(all_mods)
         self.num_classes = len(self.label_encoder.classes_)
         self.df["Label"] = self.label_encoder.transform(self.df["Module"].astype(str))
+
 
     def _create_edges(self) -> None:
         if self.df_dep.empty:
