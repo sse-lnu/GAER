@@ -174,8 +174,8 @@ def main() -> None:
 
     # GAER defaults
     p.add_argument("--encoder", type=str, choices=["gat", "gcn"], default="gat")
-    p.add_argument("--epochs", type=int, default=5)
-    p.add_argument("--hidden", type=int, default=16)
+    p.add_argument("--epochs", type=int, default=30)
+    p.add_argument("--hidden", type=int, default=128)
     p.add_argument("--dropout", type=float, default=0.0)
     p.add_argument("--lr", type=float, default=1e-4)
 
