@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import warnings
 
-# Hide repeated Windows MKL KMeans warning spam
 warnings.filterwarnings(
     "ignore",
     message=r"KMeans is known to have a memory leak on Windows with MKL.*",
@@ -56,20 +55,6 @@ DEP_FILES = {
     "Libxml": "libxml_deps.csv",
 }
 
-LANGUAGE_MAP = {
-    "AS4": "java",
-    "Hadoop": "java",
-    "Jabref": "java",
-    "TeamMates": "java",
-    "OODT": "java",
-    "HDF": "c",
-    "Bash": "c",
-    "HDC": "cpp",
-    "Chrom": "cpp",
-    "Libxml": "c",
-}
-
-
 def _load_tables(data_dir: Path, names: List[str]) -> Tuple[Dict[str, pd.DataFrame], Dict[str, pd.DataFrame]]:
     datasets: Dict[str, pd.DataFrame] = {}
     deps: Dict[str, pd.DataFrame] = {}
@@ -102,7 +87,7 @@ def run_gaer_one(
     save_labels: bool,
 ) -> Tuple[pd.DataFrame, Dict]:
     t0 = time.perf_counter()
-    data = HeterogeneousData(df, df_dep, language=LANGUAGE_MAP.get(name))
+    data = HeterogeneousData(df, df_dep)
     t_build = time.perf_counter()
 
     Z, logs = train_gae(
@@ -144,7 +129,6 @@ def run_negar_one(
 ) -> Tuple[pd.DataFrame, Dict]:
     t0 = time.perf_counter()
 
-    # Keep compatible with both patterns (some versions use from_tables)
     if hasattr(NEGARData, "from_tables") and callable(getattr(NEGARData, "from_tables")):
         data = NEGARData.from_tables(df, df_dep, use_majority_vote=True)
     else:
@@ -184,7 +168,7 @@ def main() -> None:
     p.add_argument("--sample_size", type=int, default=1000)
     p.add_argument("--user_k", type=int, default=None)
 
-    # GAER defaults (paper settings)
+    # GAER defaults
     p.add_argument("--encoder", type=str, choices=["gat", "gcn"], default="gat")
     p.add_argument("--epochs", type=int, default=30)
     p.add_argument("--hidden", type=int, default=64)
@@ -230,21 +214,6 @@ def main() -> None:
     else:
         n2v_workers = max(1, min(requested, safe_cap))
 
-    n_points = int(datasets[name].shape[0])
-    is_big = n_points > 5000
-    
-
-    n2v = Node2VecModel(
-        dimensions=int(args.n2v_dim),
-        walk_length=int(args.n2v_walk_length),
-        num_walks=100 if is_big else int(args.n2v_num_walks),
-        window=int(args.n2v_window),
-        epochs=1 if is_big else int(args.n2v_epochs),
-        p=float(args.n2v_p),
-        q=float(args.n2v_q),
-        workers=n2v_workers,
-        negative=1 if is_big else int(args.n2v_negative),
-    )
     rows = []
     labels_dump = {}
 
@@ -276,6 +245,23 @@ def main() -> None:
         for name in iterator:
             if not tqdm:
                 print(f"[NEGAR] {name} ...")
+
+            # FIX: name exists here, so compute size here
+            n_points = int(datasets[name].shape[0])
+            is_big = n_points > 5000
+
+            # FIX: build Node2Vec per dataset (big ones get cheaper params)
+            n2v = Node2VecModel(
+                dimensions=int(args.n2v_dim),
+                walk_length=int(args.n2v_walk_length),
+                num_walks=100 if is_big else int(args.n2v_num_walks),
+                window=int(args.n2v_window),
+                epochs=1 if is_big else int(args.n2v_epochs),
+                p=float(args.n2v_p),
+                q=float(args.n2v_q),
+                workers=n2v_workers,
+                negative=1 if is_big else int(args.n2v_negative),
+            )
 
             df_row, out = run_negar_one(
                 name=name,
