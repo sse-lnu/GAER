@@ -5,7 +5,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 from sklearn.cluster import AgglomerativeClustering, KMeans
-from sklearn.metrics import adjusted_rand_score, silhouette_score
+from sklearn.metrics import adjusted_rand_score
 
 from metrics.mojo import MoJoCalculator
 from metrics.a2a import A2ACalculator
@@ -14,12 +14,10 @@ from metrics.turbomq import TurboMQ
 
 
 class ClusterAndEval:
-    def __init__(self, k_range: Iterable[int] = range(10, 31), sample_size: int = 1000):
+    def __init__(self, k_range: Iterable[int] = range(10, 31), sample_size: int = 2000):
         self.k_range = list(k_range)
         self.sample_size = int(sample_size)
-
-    def _infer_method(self, data) -> str:
-        return "kmeans" if hasattr(data, "G") else "ahc"
+       
 
     def _get_nodes(self, data, n: int) -> List[str]:
         if hasattr(data, "nodes") and data.nodes is not None and len(data.nodes) == n:
@@ -37,25 +35,25 @@ class ClusterAndEval:
             return data.df["Label"].to_numpy(dtype=int)
         return None
 
+
     def _get_deps(self, data) -> Optional[pd.DataFrame]:
         if hasattr(data, "df_dep") and isinstance(data.df_dep, pd.DataFrame):
-            return data.df_dep
-        if hasattr(data, "df_dep") and data.df_dep is not None:
             return data.df_dep
         return None
 
     def _sanitize_k(self, n: int) -> List[int]:
         ks = sorted({int(k) for k in self.k_range if 1 < int(k) < n})
         if not ks:
-            raise ValueError(f"No valid k in range for n={n}")
+            raise ValueError(f"No valid k in k_range for n={n}")
         return ks
 
-    def _fit_labels(self, X: np.ndarray, k: int, method: str) -> np.ndarray:
-        if method == "kmeans":
-            return KMeans(n_clusters=int(k)).fit_predict(X)
-        return AgglomerativeClustering(n_clusters=int(k)).fit_predict(X)
+    def _fit_labels(self, X: np.ndarray, k: int, clustering: str) -> np.ndarray:
+        k = int(k)
+        if clustering == "kmeans":
+            return KMeans(n_clusters=k).fit_predict(X)
+        return AgglomerativeClustering(n_clusters=k).fit_predict(X)
 
-    def _best_k_by_silhouette(self, X: np.ndarray, method: str) -> Tuple[int, pd.DataFrame]:
+    def _best_k_elbow(self, X: np.ndarray) -> Tuple[int, pd.DataFrame]:
         n = X.shape[0]
         ks = self._sanitize_k(n)
 
@@ -63,56 +61,35 @@ class ClusterAndEval:
         idx = np.random.choice(n, size=m, replace=False)
         Xs = X[idx]
 
-        best_k = ks[0]
-        best_s = -1.0
-        sil: Dict[int, float] = {}
-
-        for k in ks:
-            if k >= m:
-                continue
-            lab = self._fit_labels(Xs, k, method)
-            s = -1.0 if len(np.unique(lab)) < 2 else float(silhouette_score(Xs, lab, metric="euclidean"))
-            sil[int(k)] = s
-            if s > best_s:
-                best_s = s
-                best_k = int(k)
-
-        df = pd.DataFrame({"k": sorted(sil.keys()), "silhouette": [sil[k] for k in sorted(sil.keys())]})
-        return best_k, df
-
-    def _best_k_by_elbow(self, X: np.ndarray) -> Tuple[int, pd.DataFrame]:
-        n = X.shape[0]
-        ks = self._sanitize_k(n)
-
-        m = min(self.sample_size, n)
-        idx = np.random.choice(n, size=m, replace=False)
-        Xs = X[idx]
-
-        inertias: Dict[int, float] = {}
+        inertias: List[float] = []
         for k in ks:
             km = KMeans(n_clusters=int(k)).fit(Xs)
-            inertias[int(k)] = float(km.inertia_)
+            inertias.append(float(km.inertia_))
 
-        k_sorted = sorted(inertias.keys())
-        vals = np.array([inertias[k] for k in k_sorted], dtype=float)
+        if len(ks) <= 2:
+            df = pd.DataFrame({"k": ks, "inertia": inertias})
+            return int(ks[0]), df
 
-        if len(k_sorted) <= 2:
-            best_k = k_sorted[0]
-        else:
-            d1 = np.diff(vals)
-            d2 = np.diff(d1)
-            best_k = k_sorted[int(np.argmax(np.abs(d2))) + 1]
+        x = np.array(ks, dtype=float)
+        y = np.array(inertias, dtype=float)
 
-        df = pd.DataFrame({"k": k_sorted, "inertia": [inertias[k] for k in k_sorted]})
-        return int(best_k), df
+        x = (x - x.min()) / (x.max() - x.min() + 1e-12)
+        y = (y - y.min()) / (y.max() - y.min() + 1e-12)
 
-    def _eval(
-        self,
-        labels: np.ndarray,
-        y_true: np.ndarray,
-        nodes: List[str],
-        deps: Optional[pd.DataFrame],
-    ) -> Dict[str, float]:
+        p1 = np.array([x[0], y[0]])
+        p2 = np.array([x[-1], y[-1]])
+        v = p2 - p1
+        v = v / (np.linalg.norm(v) + 1e-12)
+
+        pts = np.stack([x, y], axis=1)
+        proj = p1 + ((pts - p1) @ v)[:, None] * v[None, :]
+        d = np.linalg.norm(pts - proj, axis=1)
+
+        best_k = int(ks[int(np.argmax(d))])
+        df = pd.DataFrame({"k": ks, "inertia": inertias, "elbow_dist": d.tolist()})
+        return best_k, df
+
+    def _eval(self, labels: np.ndarray, y_true: np.ndarray, nodes: List[str], deps: Optional[pd.DataFrame]) -> Dict[str, float]:
         preds, _ = pd.factorize(labels)
         y = np.asarray(y_true)
 
@@ -139,36 +116,30 @@ class ClusterAndEval:
                     normalized=True,
                 ).score()
             )
-
         return out
 
     def run(
         self,
         data,
         Z: np.ndarray,
+        clustering: str = "ahc",
         do_eval: bool = True,
         user_k: Optional[int] = None,
     ) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+
         X = np.asarray(Z, dtype=np.float32)
         n = X.shape[0]
 
-        method = self._infer_method(data)
         nodes = self._get_nodes(data, n)
-
         if user_k is None:
-            if method == "kmeans":
-                k_used, diag_df = self._best_k_by_elbow(X)
-            else:
-                k_used, diag_df = self._best_k_by_silhouette(X, method)
+            k_used, diag_df = self._best_k_elbow(X)
         else:
-            k_used = int(user_k)
-            diag_df = pd.DataFrame()
+            k_used, diag_df = int(user_k), pd.DataFrame()
 
-        labels = self._fit_labels(X, k_used, method)
+        labels = self._fit_labels(X, k_used, clustering)
 
         row: Dict[str, Any] = {
-            "Pipeline": "NEGAR" if method == "kmeans" else "GAER",
-            "Clustering": "KMeans" if method == "kmeans" else "Agglomerative",
+            "Clustering": "KMeans" if clustering == "kmeans" else "Agglomerative",
             "k_used": int(k_used),
             "Clusters": int(len(np.unique(labels))),
         }
@@ -178,10 +149,7 @@ class ClusterAndEval:
         if do_eval:
             y_true = self._get_y_true(data, n)
             if y_true is None:
-                raise ValueError(
-                    "do_eval=True but ground-truth labels not found on data "
-                    "(expected data.y_true or data.df['Label'])."
-                )
+                raise ValueError("do_eval=True but ground-truth not found (data.y_true or data.df['Label']).")
             deps = self._get_deps(data)
             row.update(self._eval(labels, y_true, nodes, deps))
 
