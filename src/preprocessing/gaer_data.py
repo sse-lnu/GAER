@@ -75,6 +75,7 @@ class HeterogeneousData(HeteroData):
         self._create_edges()
 
     def _clean_tables(self) -> None:
+
         if "Entity" not in self.df.columns:
             self.df["Entity"] = self.df["File"].astype(str).str.replace("/", ".", regex=False)
 
@@ -89,12 +90,22 @@ class HeterogeneousData(HeteroData):
             else:
                 self.df["Code"] = ""
 
+        if "Module" in self.df.columns:
+            self.df["Module"] = (
+                self.df["Module"]
+                .astype(str)
+                .str.strip()
+                .str.lower()
+                .replace({"nan": None, "none": None, "": None})
+            )
+
         keep_cols = [c for c in ["Entity", "Module", "Duplicated", "Code"] if c in self.df.columns]
+
         agg = (
-            self.df.groupby(["File"], as_index=False)
+            self.df.groupby("File", as_index=False)
             .agg({
-                **{k: "first" for k in keep_cols},
-                "Module": lambda s: sorted(set([x for x in s if pd.notna(x)]))
+                **{k: "first" for k in keep_cols if k != "Module"},
+                "Module": lambda s: [x for x in sorted(set([x for x in s if x is not None]))]
             })
         )
 
@@ -102,11 +113,14 @@ class HeterogeneousData(HeteroData):
         if empty.any():
             agg.loc[empty, "Module"] = [["__none__"]] * int(empty.sum())
 
-        agg["Duplicated"] = agg["Module"].str.len().gt(1)
         agg["Module_List"] = agg["Module"]
-        agg["Module"] = agg["Module"].apply(lambda xs: xs[0])
+        agg["Duplicated"] = agg["Module_List"].str.len().gt(1)
+
+        # KEEP ONE LABEL ONLY (drop dups already handled by set); choose LAST (use [0] for first)
+        agg["Module"] = agg["Module_List"].apply(lambda xs: xs[-1])
 
         self.df = agg.dropna(subset=["File"]).drop_duplicates(subset=["File"]).reset_index(drop=True)
+
         valid_files = set(self.df["File"].astype(str))
         dep = self.df_dep.copy()
 
@@ -194,6 +208,7 @@ class HeterogeneousData(HeteroData):
         self.label_encoder = LabelEncoder().fit(all_mods)
         self.num_classes = len(self.label_encoder.classes_)
         self.df["Label"] = self.label_encoder.transform(self.df["Module"].astype(str))
+        self.df["Label_List"] = self.df["Module_List"].apply(lambda xs: self.label_encoder.transform(xs).tolist())
 
 
     def _create_edges(self) -> None:
