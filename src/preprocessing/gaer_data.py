@@ -1,11 +1,14 @@
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import Counter, defaultdict
 from typing import Dict, List, Optional, Tuple
+
+import os
 import re
 import numpy as np
 import pandas as pd
 import torch
+
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.preprocessing import LabelEncoder, normalize
 from torch_geometric.data import HeteroData
@@ -44,104 +47,94 @@ def infer_language_from_files(files: pd.Series) -> str:
     }
     return mapping.get(ext, "java")
 
+
+from collections import Counter
+import numpy as np
+import pandas as pd
+
+
 class HeterogeneousData(HeteroData):
-    def __init__(
-        self,
-        df: pd.DataFrame,
-        df_dep: pd.DataFrame,
-        language: Optional[str] = None,
-        w2v_params: Optional[dict] = None,
-        max_df: float = 0.9,
-    ):
+    def __init__(self, df: pd.DataFrame, df_dep: pd.DataFrame, w2v_params: Optional[dict] = None, max_df: float = 0.9):
         super().__init__()
         self.df = df.copy()
         self.df_dep = df_dep.copy()
-
-        self.language = (language or infer_language_from_files(self.df.get("File", pd.Series(dtype=str)))).lower()
-        self.w2v_params = w2v_params or dict(
-            vector_size=100, window=5, min_count=5, sg=1, epochs=10, max_vocab_size=2000
-        )
+        self.w2v_params = w2v_params or dict(vector_size=100, window=5, min_count=5, sg=1, epochs=10, max_vocab_size=2000)
         self.max_df = float(max_df)
 
-        self._file_w2v: Dict[str, np.ndarray] = {}
-        self._w2v_dim: int = 0
-        self.label_encoder: Optional[LabelEncoder] = None
-        self.num_classes: Optional[int] = None
-        self.relations: List[str] = []
-        self.has_multilabels: bool = False
+        self.label_encoder = None
+        self.num_classes = 0
+        self.relations = []
 
         self._clean_tables()
         self._create_node_features()
         self._create_edges()
 
     def _clean_tables(self) -> None:
+        df = self.df.copy()
+        dep = self.df_dep.copy()
 
-        if "Entity" not in self.df.columns:
-            self.df["Entity"] = self.df["File"].astype(str).str.replace("/", ".", regex=False)
+        df["File"] = df["File"].astype(str).str.replace("\\", "/", regex=False)
+        df = df[df["Module"] != "unmapped"]
+        df["Module"] = (df["Module"].astype(str).str.strip().str.lower().replace({"nan": None, "none": None, "": None}))
+    
+        if "Entity" not in df.columns:
+            df["Entity"] = df["File"].astype(str).str.replace("/", ".", regex=False)
 
-        if "Code" not in self.df.columns:
-            if "Member_Name" in self.df.columns:
+        if "Code" not in df.columns:
+            if "Member_Name" in df.columns:
                 code_map = (
-                    self.df.groupby("File")["Member_Name"]
+                    df.groupby("File")["Member_Name"]
                     .apply(lambda s: " ".join(sorted(set(str(x) for x in s if pd.notna(x) and str(x).strip()))))
                     .to_dict()
                 )
-                self.df["Code"] = self.df["File"].map(code_map).fillna("")
+                df["Code"] = df["File"].map(code_map).fillna("")
             else:
-                self.df["Code"] = ""
+                df["Code"] = ""
+        else:
+            df["Code"] = df["Code"].fillna("").astype(str)
 
-        if "Module" in self.df.columns:
-            self.df["Module"] = (
-                self.df["Module"]
-                .astype(str)
-                .str.strip()
-                .str.lower()
-                .replace({"nan": None, "none": None, "": None})
-            )
-
-        keep_cols = [c for c in ["Entity", "Module", "Duplicated", "Code"] if c in self.df.columns]
-
-        agg = (
-            self.df.groupby("File", as_index=False)
-            .agg({
-                **{k: "first" for k in keep_cols if k != "Module"},
-                "Module": lambda s: [x for x in sorted(set([x for x in s if x is not None]))]
-            })
+        nodes = (
+            df.groupby("File", as_index=False)
+              .agg(
+                  Code=("Code", "first"),
+                  Entity=("Entity", "first"),
+                  Module_List=("Module", lambda s: sorted(set([x for x in s if x is not None]))),
+              )
         )
 
-        empty = agg["Module"].str.len() == 0
+        empty = nodes["Module_List"].apply(len) == 0
         if empty.any():
-            agg.loc[empty, "Module"] = [["__none__"]] * int(empty.sum())
+            nodes.loc[empty, "Module_List"] = [["__none__"]] * int(empty.sum())
 
-        agg["Module_List"] = agg["Module"]
-        agg["Duplicated"] = agg["Module_List"].str.len().gt(1)
+        nodes["Duplicated"] = nodes["Module_List"].apply(len).gt(1)
+        presence = Counter(m for mods in nodes["Module_List"] for m in mods)
 
-        # KEEP ONE LABEL ONLY (drop dups already handled by set); choose LAST (use [0] for first)
-        agg["Module"] = agg["Module_List"].apply(lambda xs: xs[-1])
+        def pick_min_presence(mods):
+            best = mods[-1]
+            best_c = presence.get(best, 10**12)
+            best_i = len(mods) - 1
+            for i, m in enumerate(mods):
+                c = presence.get(m, 10**12)
+                if c < best_c or (c == best_c and i > best_i):
+                    best, best_c, best_i = m, c, i
+            return best
 
-        self.df = agg.dropna(subset=["File"]).drop_duplicates(subset=["File"]).reset_index(drop=True)
+        nodes["Module"] = nodes["Module_List"].apply(pick_min_presence)
 
-        valid_files = set(self.df["File"].astype(str))
-        dep = self.df_dep.copy()
+        nodes = nodes.reset_index(drop=True)
+        nodes["File_ID"] = np.arange(len(nodes), dtype=int)
+        self.df = nodes
 
-        if "Dependency_Count" not in dep.columns:
-            dep["Dependency_Count"] = 1.0
-        if "Dependency_Type" not in dep.columns:
-            dep["Dependency_Type"] = "__dep__"
-
-        dep["Source_File"] = dep["Source_File"].astype(str)
-        dep["Target_File"] = dep["Target_File"].astype(str)
-        dep["Dependency_Type"] = dep["Dependency_Type"].fillna("__dep__").astype(str)
+        dep["Source_File"] = dep["Source_File"].astype(str).str.replace("\\", "/", regex=False)
+        dep["Target_File"] = dep["Target_File"].astype(str).str.replace("\\", "/", regex=False)
         dep["Dependency_Count"] = pd.to_numeric(dep["Dependency_Count"], errors="coerce").fillna(1.0)
 
+        valid_files = set(self.df["File"].astype(str))
         dep = dep[dep["Source_File"].isin(valid_files) & dep["Target_File"].isin(valid_files)]
         dep = dep[~dep["Dependency_Type"].str.contains("possible", case=False, na=False)]
-
         dep = dep.groupby(["Source_File", "Target_File", "Dependency_Type"], as_index=False)["Dependency_Count"].sum()
 
-        self.df["File_ID"] = range(len(self.df))
         idx_map = dict(zip(self.df["File"].astype(str), self.df["File_ID"].astype(int)))
-
         dep["Source_ID"] = dep["Source_File"].map(idx_map)
         dep["Target_ID"] = dep["Target_File"].map(idx_map)
         dep = dep.dropna(subset=["Source_ID", "Target_ID"])
@@ -149,80 +142,69 @@ class HeterogeneousData(HeteroData):
 
         self.df_dep = dep.reset_index(drop=True)
 
+
     def _create_node_features(self) -> None:
-        base = self.df[["File", "Entity", "Code"]].copy()
-        base["File"] = base["File"].astype(str)
+        files = self.df["File"].astype(str).str.replace("\\", "/", regex=False).tolist()
+        segs = {f: [s for s in "/".join(f.split("/")[:-1]).split("/") if s] for f in files}
+
+        firsts = [ss[0] for ss in segs.values() if ss]
+        common_root = firsts[0] if firsts and all(x == firsts[0] for x in firsts) else None
+
+        drop = {"src", "main", "java"}
+        drop.add(common_root) 
+
+        def folder_tokens(f: str) -> list[str]:
+            out, seen = [], set()
+            for s in segs.get(f, []):
+                if s not in drop and s not in seen:
+                    out.append(s); seen.add(s)
+            if out:
+                return out
+
+            name = f.split("/")[-1]
+            base, ext = os.path.splitext(name)
+            toks = re.findall(r"[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z]+|[A-Z]+|\d+", base.lower())
+            if ext.lower() in {".c", ".h", ".cpp", ".hpp"}:
+                return (["root"] if "/" not in f else [f.split("/")[0]]) + toks
+            return toks
+
+
+        loc_texts = [" ".join(folder_tokens(f)) or "root" for f in files]
+        self.df["Loc_features"] = loc_texts
+        loc_features = CountVectorizer(binary=True).fit_transform(loc_texts).toarray().astype(np.float32)
+
+        base = self.df[["Entity", "Code"]].copy()
         base["Entity"] = base["Entity"].astype(str)
         base["Code"] = base["Code"].fillna("").astype(str)
-
-        gen = W2VEmbeddingGenerator(base[["Entity", "Code"]], max_df=self.max_df)
-        emb_map = gen.generate(**self.w2v_params)
+        emb_map = W2VEmbeddingGenerator(base, max_df=self.max_df).generate(**self.w2v_params)
 
         if emb_map:
             self._w2v_dim = next(iter(emb_map.values())).shape[0]
             zero = np.zeros(self._w2v_dim, dtype=np.float32)
 
-            file2ents = base.groupby("File")["Entity"].apply(list).to_dict()
-            self._file_w2v = {}
-            for f, ents in file2ents.items():
-                vecs = [emb_map.get(e, zero) for e in ents if e in emb_map]
-                self._file_w2v[f] = np.mean(vecs, axis=0).astype(np.float32) if vecs else zero
+            code_features = np.vstack([emb_map.get(e, zero) for e in self.df["Entity"].astype(str)]).astype(np.float32)
+            code_features = normalize(code_features, norm="l2").astype(np.float32)
+
+            features = np.hstack([loc_features, code_features]).astype(np.float32)
         else:
-            self._file_w2v, self._w2v_dim = {}, 0
-
-        def trim_without_ext(path: str, lang: str) -> str:
-            s = str(path).replace("\\", "/").lower()
-            lang = (lang or "java").lower()
-            s_noext = s.rsplit(".", 1)[0] if "." in s else s
-
-            if lang == "java":
-                dir_part = s_noext.rsplit("/", 1)[0] if "/" in s_noext else ""
-                toks = [t for t in dir_part.split("/") if t]
-                return " ".join(toks)
-
-            if lang in ("c", "cpp", "c++"):
-                toks = [t for t in re.split(r"[/\.]+", s_noext) if t]
-                return " ".join(toks)
-
-            dir_part = s_noext.rsplit("/", 1)[0] if "/" in s_noext else ""
-            toks = [t for t in dir_part.split("/") if t]
-            return " ".join(toks)
-
-        lang = infer_language_from_files(self.df["File"])
-        base_names = self.df["File"].astype(str).map(lambda s: trim_without_ext(s, lang))
-
-        loc_vectorizer = CountVectorizer(binary=True)
-        loc_features = loc_vectorizer.fit_transform(base_names).toarray()
-        if self._w2v_dim > 0 and self._file_w2v:
-            zero = np.zeros(self._w2v_dim, dtype=np.float32)
-            code_features = np.vstack([self._file_w2v.get(f, zero) for f in self.df["File"].astype(str)])
-            code_features = normalize(code_features, norm="l2")
-            features = np.hstack([loc_features, code_features])
-        else:
+            self._w2v_dim = 0
             features = loc_features
 
         self["entity"].x = torch.tensor(features, dtype=torch.float)
         self.nodes = self.df["File"]
 
-        all_mods = sorted({m for xs in self.df["Module_List"] for m in (xs or [])}) or ["__none__"]
-        self.label_encoder = LabelEncoder().fit(all_mods)
+        self.label_encoder = LabelEncoder().fit(self.df["Module"].astype(str))
         self.num_classes = len(self.label_encoder.classes_)
         self.df["Label"] = self.label_encoder.transform(self.df["Module"].astype(str))
-        self.df["Label_List"] = self.df["Module_List"].apply(lambda xs: self.label_encoder.transform(xs).tolist())
 
 
     def _create_edges(self) -> None:
         if self.df_dep.empty:
             self.relations = []
             return
+
         self.relations = sorted(self.df_dep["Dependency_Type"].dropna().unique().tolist())
-        edge_dict: Dict[str, List[Tuple[int, int]]] = defaultdict(list)
-
-        for _, row in self.df_dep.iterrows():
-            edge_dict[row["Dependency_Type"]].append((int(row["Source_ID"]), int(row["Target_ID"])))
-
-        for dep_type, edges in edge_dict.items():
-            if not edges:
-                continue
-            src, tgt = zip(*edges)
-            self["entity", dep_type, "entity"].edge_index = torch.tensor([src, tgt], dtype=torch.long)
+        for dep_type, g in self.df_dep.groupby("Dependency_Type"):
+            src = torch.tensor(g["Source_ID"].to_numpy(dtype=np.int64), dtype=torch.long)
+            tgt = torch.tensor(g["Target_ID"].to_numpy(dtype=np.int64), dtype=torch.long)
+            self["entity", str(dep_type), "entity"].edge_index = torch.stack([src, tgt], dim=0)
