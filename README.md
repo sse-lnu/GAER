@@ -14,6 +14,7 @@ This repository contains code to run two software architecture recovery pipeline
 
 ## Setup
 
+Note that some of the datasets are large, so Git Large File Storage is required to check out the datasets. If you do not already have git-lfs installed, please follow the instructions at [https://git-lfs.com/](https://git-lfs.com/). Note that the docker images manage lfs during build, so if you prefer to run via docker, there is no need to install git-lfs.
 
 
 ```bash
