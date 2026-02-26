@@ -26,33 +26,37 @@ cd GAER
 
 ### Running Experiments
 
+We provide two ways to manage the required dependencies, via docker or pyproject.toml. Instructions for how to build and run the docker containers are available in `docker/`.
 
+We recommend that you use [uv](https://github.com/astral-sh/uv) if you want to manage the depdencies with the pyproject.toml. Note that we use NVIDIA CUDA by default. If you do not have access to an NVIDIA GPU, update the pyproject.toml to install CPU-versions of PyG and PyTorch.
 
-Example run GAER on a subset of the data with Default parameters
+Here follows some examples on how you can run GAER and NEGAR. Note that these exampels work simiarly if you run via docker.
+
+Run GAER on a subset of the data with Default parameters
 
 ```bash
 
-python run\_experiments.py --pipeline gaer --datasets AS4 Hadoop
+uv run src/run_experiments.py --pipeline gaer --datasets AS4 Hadoop
 
 ```
-Example run NEGAR baseline on a subset of the data with Default parameters
+Run NEGAR baseline on a subset of the data with Default parameters
 
 ```bash
-python run\_experiments.py --pipeline negar --datasets Bash
+uv run src/run_experiments.py --pipeline negar --datasets Bash
 
 ```
 Run all experiments with Default parameters and save recovered clusters Labels without evaluation
 
 ```bash
 
-python run_experiments.py --pipeline both --datasets all --no_eval --save_labels
+uv run src/run_experiments.py --pipeline both --datasets all --no_eval --save_labels
 
 ```
 List available options
 
 ```bash
 
-python run\_experiments.py -h
+uv run src/run_experiments.py --help
 
 ```
 
@@ -66,6 +70,6 @@ The experiment runner produces:
 
 - Evaluation metrics (e.g., MoJoFM, A2A, C2C coverage, ARI; plus timing fields)
 
-Outputs are written to the output directory (default: `results/`, or set via `--out\_dir`).
+Outputs are written to the output directory (default: `results/`, or set via `--out_dir`).
 
 

@@ -1,0 +1,44 @@
+[project]
+name = "project"
+version = "0.1.0"
+requires-python = ">=3.11.11, <3.12"
+dependencies = [
+  "torch==2.4.0",
+  "torch-geometric==2.7.0",
+  "torch-scatter==2.1.2",
+  "torch-sparse==0.6.18",
+  "torch-cluster==1.6.3",
+  "torch-spline-conv==1.2.2",
+  "numpy==1.26.4",
+  "pandas==2.2.3",
+  "node2vec==0.5.0",
+  "scikit-learn==1.4.1.post1",
+  "networkx==3.2.1",
+  "gensim==4.3.3",
+  "nltk==3.8.1",
+  "tqdm==4.66.5",
+]
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu121" }]
+torchvision = [{ index = "pytorch-cu121" }]
+
+torch-scatter = [{ index = "pyg-t240-cu121" }]
+torch-sparse = [{ index = "pyg-t240-cu121" }]
+torch-cluster = [{ index = "pyg-t240-cu121" }]
+torch-spline-conv = [{ index = "pyg-t240-cu121" }]
+
+[[tool.uv.index]]
+name = "pytorch-cu121"
+# Change utl to https://download.pytorch.org/whl/cpu
+# to use CPU instead of GPU
+url ="https://download.pytorch.org/whl/cu121" 
+explicit = true
+
+[[tool.uv.index]]
+name = "pyg-t240-cu121"
+# Change url to https://data.pyg.org/whl/torch-2.4.0+cpu.html
+# to use CPU instead of GPU.
+url = "https://data.pyg.org/whl/torch-2.4.0+cu121.html"
+format = "flat"
+explicit = true
