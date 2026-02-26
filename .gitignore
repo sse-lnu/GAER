@@ -1,11 +1,3 @@
 ﻿__pycache__/
 *.pyc
 .ipynb_checkpoints/
-*.csv
-data/
-results/
-Results/
-NEGAR/
-R_plots/
-GAER/GAER/
-GAER/
