@@ -79,7 +79,9 @@ class W2VEmbeddingGenerator:
 
         self.max_df = float(max_df)
         self.min_token_len = int(min_token_len)
-        self.stop_words = set(w.lower() for w in (stop_words or DEFAULT_STOPWORDS))
+        if stop_words is None:
+            stop_words = DEFAULT_STOPWORDS
+        self.stop_words = set(w.lower() for w in stop_words)
 
         self.tokens_per_entity: Dict[str, List[str]] = {}
         self._build_corpus()

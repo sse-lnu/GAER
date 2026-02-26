@@ -14,30 +14,42 @@ from metrics.turbomq import TurboMQ
 
 
 class ClusterAndEval:
-    def __init__(self, k_range: Iterable[int] = range(10, 31), sample_size: int = 2000):
+    def __init__(
+        self,
+        k_range: Iterable[int] = range(10, 31),
+        sample_size: int = 2000,
+        ahc_linkage: str = "ward",
+    ):
         self.k_range = list(k_range)
         self.sample_size = int(sample_size)
-       
+        self.ahc_linkage = str(ahc_linkage)
 
     def _get_nodes(self, data, n: int) -> List[str]:
         if hasattr(data, "nodes") and data.nodes is not None and len(data.nodes) == n:
             return [str(x) for x in list(data.nodes)]
         if hasattr(data, "node_list") and data.node_list is not None and len(data.node_list) == n:
             return [str(x) for x in list(data.node_list)]
-        if hasattr(data, "df") and isinstance(data.df, pd.DataFrame) and "File" in data.df.columns and len(data.df) == n:
+        if (
+            hasattr(data, "df")
+            and isinstance(data.df, pd.DataFrame)
+            and "File" in data.df.columns
+            and len(data.df) == n
+        ):
             return data.df["File"].astype(str).tolist()
         return [str(i) for i in range(n)]
 
     def _get_y_true(self, data, n: int) -> Optional[np.ndarray]:
         if hasattr(data, "y_true") and data.y_true is not None and len(data.y_true) == n:
             return np.asarray(data.y_true, dtype=int)
-        if hasattr(data, "df") and isinstance(data.df, pd.DataFrame) and "Label" in data.df.columns and len(data.df) == n:
+        if (
+            hasattr(data, "df")
+            and isinstance(data.df, pd.DataFrame)
+            and "Label" in data.df.columns
+            and len(data.df) == n
+        ):
             return data.df["Label"].to_numpy(dtype=int)
         return None
 
-    def _labels_to_dict(self, nodes: List[str], labels: np.ndarray) -> Dict[str, int]:
-        return {str(nodes[i]): int(labels[i]) for i in range(len(nodes))}
-    
     def _get_deps(self, data) -> Optional[pd.DataFrame]:
         if hasattr(data, "df_dep") and isinstance(data.df_dep, pd.DataFrame):
             return data.df_dep
@@ -51,9 +63,15 @@ class ClusterAndEval:
 
     def _fit_labels(self, X: np.ndarray, k: int, clustering: str) -> np.ndarray:
         k = int(k)
-        if clustering == "kmeans":
+        c = str(clustering).lower()
+
+        if c == "kmeans":
             return KMeans(n_clusters=k).fit_predict(X)
-        return AgglomerativeClustering(n_clusters=k).fit_predict(X)
+
+        if c in {"ahc", "agg", "agglomerative"}:
+            return AgglomerativeClustering(n_clusters=k, linkage=self.ahc_linkage).fit_predict(X)
+
+        raise ValueError(f"Unknown clustering='{clustering}'. Use 'kmeans' or 'ahc'.")
 
     def _best_k_elbow(self, X: np.ndarray) -> Tuple[int, pd.DataFrame]:
         n = X.shape[0]
@@ -91,7 +109,75 @@ class ClusterAndEval:
         df = pd.DataFrame({"k": ks, "inertia": inertias, "elbow_dist": d.tolist()})
         return best_k, df
 
-    def _eval(self, labels: np.ndarray, y_true: np.ndarray, nodes: List[str], deps: Optional[pd.DataFrame]) -> Dict[str, float]:
+    def _best_k_elbow_ahc(self, X: np.ndarray) -> Tuple[int, pd.DataFrame]:
+        n = X.shape[0]
+        ks = self._sanitize_k(n)
+
+        m = min(self.sample_size, n)
+        idx = np.random.choice(n, size=m, replace=False)
+        Xs = X[idx]
+
+        wcss_vals: List[float] = []
+        for k in ks:
+            labels = AgglomerativeClustering(
+                n_clusters=int(k), linkage=self.ahc_linkage
+            ).fit_predict(Xs)
+
+            # Post-hoc WCSS from labels (centroids are means of clusters).
+            w = 0.0
+            for c in np.unique(labels):
+                Xc = Xs[labels == c]
+                if Xc.shape[0] <= 1:
+                    continue
+                mu = Xc.mean(axis=0, keepdims=True)
+                diff = Xc - mu
+                w += float((diff * diff).sum())
+
+            wcss_vals.append(w)
+
+        if len(ks) <= 2:
+            df = pd.DataFrame({"k": ks, "wcss": wcss_vals})
+            return int(ks[0]), df
+
+        x = np.array(ks, dtype=float)
+        y = np.array(wcss_vals, dtype=float)
+
+        x = (x - x.min()) / (x.max() - x.min() + 1e-12)
+        y = (y - y.min()) / (y.max() - y.min() + 1e-12)
+
+        p1 = np.array([x[0], y[0]])
+        p2 = np.array([x[-1], y[-1]])
+        v = p2 - p1
+        v = v / (np.linalg.norm(v) + 1e-12)
+
+        pts = np.stack([x, y], axis=1)
+        proj = p1 + ((pts - p1) @ v)[:, None] * v[None, :]
+        d = np.linalg.norm(pts - proj, axis=1)
+
+        best_k = int(ks[int(np.argmax(d))])
+        df = pd.DataFrame({"k": ks, "wcss": wcss_vals, "elbow_dist": d.tolist()})
+        return best_k, df
+
+    def _choose_k(self, X: np.ndarray, clustering: str) -> Tuple[int, pd.DataFrame]:
+        """
+        Select k using the elbow method matched to the clustering algorithm:
+        - KMeans: inertia curve from KMeans
+        - AHC: WCSS curve computed from AHC labels (post-hoc)
+        """
+        c = str(clustering).lower()
+        if c == "kmeans":
+            return self._best_k_elbow(X)
+        if c in {"ahc", "agg", "agglomerative"}:
+            return self._best_k_elbow_ahc(X)
+        raise ValueError(f"Unknown clustering='{clustering}'. Use 'kmeans' or 'ahc'.")
+
+    def _eval(
+        self,
+        labels: np.ndarray,
+        y_true: np.ndarray,
+        nodes: List[str],
+        deps: Optional[pd.DataFrame],
+    ) -> Dict[str, float]:
         preds, _ = pd.factorize(labels)
         y = np.asarray(y_true)
 
@@ -133,22 +219,24 @@ class ClusterAndEval:
         n = X.shape[0]
 
         nodes = self._get_nodes(data, n)
+
         if user_k is None:
-            k_used, _ = self._best_k_elbow(X)
+            k_used, diag_df = self._choose_k(X, clustering)
         else:
-            k_used, _ = int(user_k), pd.DataFrame()
+            k_used, diag_df = int(user_k), pd.DataFrame()
 
         labels = self._fit_labels(X, k_used, clustering)
 
         row: Dict[str, Any] = {
-            "Clustering": "KMeans" if clustering == "kmeans" else "Agglomerative",
+            "Clustering": "KMeans" if str(clustering).lower() == "kmeans" else "Agglomerative",
             "k_used": int(k_used),
             "Clusters": int(len(np.unique(labels))),
         }
 
         out: Dict[str, Any] = {
-            "labels": self._labels_to_dict(nodes, labels),
-            "Recovered_Clusters": int(k_used),
+            "labels": labels.tolist(),
+            "k_used": int(k_used),
+            "k_search": diag_df,
         }
 
         if do_eval:
