@@ -159,8 +159,17 @@ class ClusterAndEval:
         return best_k, df
 
     def _choose_k(self, X: np.ndarray, clustering: str) -> Tuple[int, pd.DataFrame]:
-        
-        return self._best_k_elbow(X)
+        """
+        Select k using the elbow method matched to the clustering algorithm:
+        - KMeans: inertia curve from KMeans
+        - AHC: WCSS curve computed from AHC labels (post-hoc)
+        """
+        c = str(clustering).lower()
+        if c == "kmeans":
+            return self._best_k_elbow(X)
+        if c in {"ahc", "agg", "agglomerative"}:
+            return self._best_k_elbow_ahc(X)
+        raise ValueError(f"Unknown clustering='{clustering}'. Use 'kmeans' or 'ahc'.")
 
     def _eval(
         self,
