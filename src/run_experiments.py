@@ -91,6 +91,11 @@ def run_gaer_one(
     data = HeterogeneousData(df, df_dep)
     t_build = time.perf_counter()
 
+    n_points = int(data.df.shape[0])
+    if n_points < 100:
+        epochs = max(int(epochs), 50) 
+        lr = max(float(lr), 1e-3)
+
     Z, logs = train_gae(
         data,
         epochs=epochs,
@@ -212,11 +217,12 @@ def main() -> None:
     do_eval = not bool(args.no_eval)
 
     cpu_count = os.cpu_count() or 1
+    safe_cap = max(1, min(4, cpu_count - 1))
     requested = int(args.n2v_workers)
     if requested <= 0:
-        n2v_workers = 1
+        n2v_workers = safe_cap
     else:
-        n2v_workers = max(1,requested)
+        n2v_workers = max(1, min(requested, safe_cap))
 
     rows: List[pd.DataFrame] = []
     labels_dump: Dict[str, Dict] = {}
