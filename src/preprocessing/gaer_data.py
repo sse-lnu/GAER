@@ -101,7 +101,6 @@ class HeterogeneousData(HeteroData):
                   Module_List=("Module", lambda s: sorted(set([x for x in s if x is not None]))),
               )
         )
-
         empty = nodes["Module_List"].apply(len) == 0
         if empty.any():
             nodes.loc[empty, "Module_List"] = [["__none__"]] * int(empty.sum())
@@ -150,25 +149,27 @@ class HeterogeneousData(HeteroData):
         common_root = firsts[0] if firsts and all(x == firsts[0] for x in firsts) else None
 
         drop = {"src", "main", "java"}
-        drop.add(common_root) 
+        if common_root:
+            drop.add(common_root)
+
         def folder_tokens(f: str) -> list[str]:
             f = f.replace("\\", "/").strip("/")
             if not f:
                 return []
 
-            parts = [p for p in f.split("/") if p] 
+            parts = [p for p in f.split("/") if p]
             name = parts[-1]
             base, ext = os.path.splitext(name)
             ext = ext.lower()
+
             toks = []
-            
-            toks.extend(parts[:-1])
-            if ext == ".java":
-                pass
-            elif ext in {".c", ".h", ".cpp", ".hpp"}:
+            toks.extend(parts[:-1])  # folders
+
+            if ext in {".c", ".h", ".cpp", ".hpp"}:
                 toks.extend([t for t in base.lower().split(".") if t])
             else:
                 toks.append(base.lower())
+
             out, seen = [], set()
             for t in toks:
                 if t and t not in drop and t not in seen:
