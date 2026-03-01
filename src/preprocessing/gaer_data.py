@@ -142,7 +142,6 @@ class HeterogeneousData(HeteroData):
 
         self.df_dep = dep.reset_index(drop=True)
 
-
     def _create_node_features(self) -> None:
         files = self.df["File"].astype(str).str.replace("\\", "/", regex=False).tolist()
         segs = {f: [s for s in "/".join(f.split("/")[:-1]).split("/") if s] for f in files}
@@ -152,22 +151,30 @@ class HeterogeneousData(HeteroData):
 
         drop = {"src", "main", "java"}
         drop.add(common_root) 
-
         def folder_tokens(f: str) -> list[str]:
-            out, seen = [], set()
-            for s in segs.get(f, []):
-                if s not in drop and s not in seen:
-                    out.append(s); seen.add(s)
-            if out:
-                return out
+            f = f.replace("\\", "/").strip("/")
+            if not f:
+                return []
 
-            name = f.split("/")[-1]
+            parts = [p for p in f.split("/") if p] 
+            name = parts[-1]
             base, ext = os.path.splitext(name)
-            toks = re.findall(r"[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z]+|[A-Z]+|\d+", base.lower())
-            if ext.lower() in {".c", ".h", ".cpp", ".hpp"}:
-                return (["root"] if "/" not in f else [f.split("/")[0]]) + toks
-            return toks
-
+            ext = ext.lower()
+            toks = []
+            
+            toks.extend(parts[:-1])
+            if ext == ".java":
+                pass
+            elif ext in {".c", ".h", ".cpp", ".hpp"}:
+                toks.extend([t for t in base.lower().split(".") if t])
+            else:
+                toks.append(base.lower())
+            out, seen = [], set()
+            for t in toks:
+                if t and t not in drop and t not in seen:
+                    out.append(t)
+                    seen.add(t)
+            return out
 
         loc_texts = [" ".join(folder_tokens(f)) or "root" for f in files]
         self.df["Loc_features"] = loc_texts
@@ -197,12 +204,10 @@ class HeterogeneousData(HeteroData):
         self.num_classes = len(self.label_encoder.classes_)
         self.df["Label"] = self.label_encoder.transform(self.df["Module"].astype(str))
 
-
     def _create_edges(self) -> None:
         if self.df_dep.empty:
             self.relations = []
             return
-
         self.relations = sorted(self.df_dep["Dependency_Type"].dropna().unique().tolist())
         for dep_type, g in self.df_dep.groupby("Dependency_Type"):
             src = torch.tensor(g["Source_ID"].to_numpy(dtype=np.int64), dtype=torch.long)
