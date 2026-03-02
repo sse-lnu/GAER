@@ -157,11 +157,24 @@ class HeterogeneousData(HeteroData):
             if not f:
                 return []
 
-            parts = [p for p in f.split("/") if p]
-            name = parts[-1]
+            name = f.split("/")[-1]
             base, ext = os.path.splitext(name)
             ext = ext.lower()
 
+            # --- JAVA: OLD logic ---
+            if ext == ".java":
+                out, seen = [], set()
+                for s in segs.get(f, []):
+                    if s and s not in drop and s not in seen:
+                        out.append(s); seen.add(s)
+                if out:
+                    return out
+
+                toks = re.findall(r"[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z]+|[A-Z]+|\d+", base.lower())
+                return toks
+
+            # --- NON-JAVA: NEW logic ---
+            parts = [p for p in f.split("/") if p]
             toks = []
             toks.extend(parts[:-1])  # folders
 
@@ -173,8 +186,7 @@ class HeterogeneousData(HeteroData):
             out, seen = [], set()
             for t in toks:
                 if t and t not in drop and t not in seen:
-                    out.append(t)
-                    seen.add(t)
+                    out.append(t); seen.add(t)
             return out
 
         loc_texts = [" ".join(folder_tokens(f)) or "root" for f in files]
