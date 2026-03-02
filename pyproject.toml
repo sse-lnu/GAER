@@ -3,7 +3,7 @@ name = "project"
 version = "0.1.0"
 requires-python = ">=3.11.11, <3.12"
 dependencies = [
-  "torch==2.4.0",
+  "torch==2.8.0",
   "torch-geometric==2.7.0",
   "torch-scatter==2.1.2",
   "torch-sparse==0.6.18",
@@ -20,25 +20,25 @@ dependencies = [
 ]
 
 [tool.uv.sources]
-torch = [{ index = "pytorch-cu121" }]
-torchvision = [{ index = "pytorch-cu121" }]
+torch = [{ index = "pytorch-cu129" }]
+torchvision = [{ index = "pytorch-cu129" }]
 
-torch-scatter = [{ index = "pyg-t240-cu121" }]
-torch-sparse = [{ index = "pyg-t240-cu121" }]
-torch-cluster = [{ index = "pyg-t240-cu121" }]
-torch-spline-conv = [{ index = "pyg-t240-cu121" }]
+torch-scatter = [{ index = "pyg-t280-cu129" }]
+torch-sparse = [{ index = "pyg-t280-cu129" }]
+torch-cluster = [{ index = "pyg-t280-cu129" }]
+torch-spline-conv = [{ index = "pyg-t280-cu129" }]
 
 [[tool.uv.index]]
-name = "pytorch-cu121"
+name = "pytorch-cu129"
 # Change utl to https://download.pytorch.org/whl/cpu
 # to use CPU instead of GPU
-url ="https://download.pytorch.org/whl/cu121" 
+url ="https://download.pytorch.org/whl/cu129" 
 explicit = true
 
 [[tool.uv.index]]
-name = "pyg-t240-cu121"
-# Change url to https://data.pyg.org/whl/torch-2.4.0+cpu.html
+name = "pyg-t280-cu129"
+# Change url to https://data.pyg.org/whl/torch-2.8.0+cpu.html
 # to use CPU instead of GPU.
-url = "https://data.pyg.org/whl/torch-2.4.0+cu121.html"
+url = "https://data.pyg.org/whl/torch-2.8.0+cu129.html"
 format = "flat"
 explicit = true
