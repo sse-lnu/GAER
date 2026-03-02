@@ -48,11 +48,6 @@ def infer_language_from_files(files: pd.Series) -> str:
     return mapping.get(ext, "java")
 
 
-from collections import Counter
-import numpy as np
-import pandas as pd
-
-
 class HeterogeneousData(HeteroData):
     def __init__(self, df: pd.DataFrame, df_dep: pd.DataFrame, w2v_params: Optional[dict] = None, max_df: float = 0.9):
         super().__init__()
@@ -176,7 +171,7 @@ class HeterogeneousData(HeteroData):
             # --- C, C++ ---
             parts = [p for p in f.split("/") if p]
             toks = []
-            toks.extend(parts[:-1])  # folders
+            toks.extend(parts[:-1])
 
             if ext in {".c", ".h", ".cpp", ".hpp"}:
                 toks.extend([t for t in base.lower().split(".") if t])
