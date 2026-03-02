@@ -161,7 +161,7 @@ class HeterogeneousData(HeteroData):
             base, ext = os.path.splitext(name)
             ext = ext.lower()
 
-            # --- JAVA: OLD logic ---
+            # --- JAVA ---
             if ext == ".java":
                 out, seen = [], set()
                 for s in segs.get(f, []):
@@ -173,7 +173,7 @@ class HeterogeneousData(HeteroData):
                 toks = re.findall(r"[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z]+|[A-Z]+|\d+", base.lower())
                 return toks
 
-            # --- NON-JAVA: NEW logic ---
+            # --- C, C++ ---
             parts = [p for p in f.split("/") if p]
             toks = []
             toks.extend(parts[:-1])  # folders
