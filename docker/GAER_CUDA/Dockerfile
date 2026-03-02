@@ -14,4 +14,4 @@ RUN pip install --no-cache networkx==3.2.1 gensim==4.3.3 nltk==3.8.1 tqdm==4.66.
 
 COPY --from=build /git/GAER /gaer
 WORKDIR /gaer/src
-ENTRYPOINT ["uv", "run", "run_experiments.py", "--data_dir", "/gaer/data", "--out_dir", "/gaer/results"]
+ENTRYPOINT ["python", "run_experiments.py", "--data_dir", "/gaer/data", "--out_dir", "/gaer/results"]
