@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from collections import Counter, defaultdict
+from collections import Counter
 from typing import Dict, List, Optional, Tuple
 
 import os
 import re
+import ast
 import numpy as np
 import pandas as pd
 import torch
@@ -69,9 +70,18 @@ class HeterogeneousData(HeteroData):
         dep = self.df_dep.copy()
 
         df["File"] = df["File"].astype(str).str.replace("\\", "/", regex=False)
-        df = df[df["Module"] != "unmapped"]
-        df["Module"] = (df["Module"].astype(str).str.strip().str.lower().replace({"nan": None, "none": None, "": None}))
-    
+
+        if "Module" in df.columns:
+            df["Module"] = (
+                df["Module"]
+                .astype(str)
+                .str.strip()
+                .str.lower()
+                .replace({"nan": None, "none": None, "": None, "unmapped": None})
+            )
+        else:
+            df["Module"] = None
+
         if "Entity" not in df.columns:
             df["Entity"] = df["File"].astype(str).str.replace("/", ".", regex=False)
 
@@ -88,32 +98,56 @@ class HeterogeneousData(HeteroData):
         else:
             df["Code"] = df["Code"].fillna("").astype(str)
 
+        def parse_module_list(x):
+            if isinstance(x, list):
+                vals = x
+            elif pd.isna(x):
+                vals = []
+            else:
+                s = str(x).strip()
+                if not s:
+                    vals = []
+                else:
+                    try:
+                        vals = ast.literal_eval(s)
+                        if not isinstance(vals, (list, tuple, set)):
+                            vals = [vals]
+                    except Exception:
+                        vals = [s]
+
+            out = []
+            for v in vals:
+                v = str(v).strip().lower()
+                if v and v not in {"nan", "none", "unmapped"}:
+                    out.append(v)
+            return sorted(set(out))
+
+        if "Module_List" in df.columns:
+            df["Module_List"] = df["Module_List"].apply(parse_module_list)
+            df["Module_List"] = df.apply(
+                lambda r: r["Module_List"] if len(r["Module_List"]) > 0
+                else ([r["Module"]] if r["Module"] is not None else []),
+                axis=1,
+            )
+        else:
+            df["Module_List"] = df["Module"].apply(lambda x: [x] if x is not None else [])
+
         nodes = (
             df.groupby("File", as_index=False)
-              .agg(
-                  Code=("Code", "first"),
-                  Entity=("Entity", "first"),
-                  Module_List=("Module", lambda s: sorted(set([x for x in s if x is not None]))),
-              )
+            .agg(
+                Code=("Code", "first"),
+                Entity=("Entity", "first"),
+                Module_List=("Module_List", lambda s: sorted(set(m for lst in s for m in lst if m is not None))),
+            )
         )
+
         empty = nodes["Module_List"].apply(len) == 0
         if empty.any():
             nodes.loc[empty, "Module_List"] = [["__none__"]] * int(empty.sum())
 
-        nodes["Duplicated"] = nodes["Module_List"].apply(len).gt(1)
-        presence = Counter(m for mods in nodes["Module_List"] for m in mods)
-
-        def pick_min_presence(mods):
-            best = mods[-1]
-            best_c = presence.get(best, 10**12)
-            best_i = len(mods) - 1
-            for i, m in enumerate(mods):
-                c = presence.get(m, 10**12)
-                if c < best_c or (c == best_c and i > best_i):
-                    best, best_c, best_i = m, c, i
-            return best
-
-        nodes["Module"] = nodes["Module_List"].apply(pick_min_presence)
+        nodes["Duplicated"] = nodes["Module_List"].apply(lambda x: len(x) > 1)
+        nodes["Primary_Module"] = nodes["Module_List"].apply(lambda x: x[0])
+        nodes["Module"] = nodes["Primary_Module"]
 
         nodes = nodes.reset_index(drop=True)
         nodes["File_ID"] = np.arange(len(nodes), dtype=int)
@@ -208,9 +242,10 @@ class HeterogeneousData(HeteroData):
         self["entity"].x = torch.tensor(features, dtype=torch.float)
         self.nodes = self.df["File"]
 
-        self.label_encoder = LabelEncoder().fit(self.df["Module"].astype(str))
+        all_modules = sorted({m for mods in self.df["Module_List"] for m in mods})
+        self.label_encoder = LabelEncoder().fit(all_modules)
         self.num_classes = len(self.label_encoder.classes_)
-        self.df["Label"] = self.label_encoder.transform(self.df["Module"].astype(str))
+        self.df["Label"] = self.label_encoder.transform(self.df["Primary_Module"].astype(str))
 
     def _create_edges(self) -> None:
         if self.df_dep.empty:
