@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from typing import Any, Dict, Iterable, List, Optional, Tuple
-from collections import defaultdict, Counter
 import numpy as np
 import pandas as pd
 from sklearn.cluster import AgglomerativeClustering, KMeans
