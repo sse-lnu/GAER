@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from typing import Optional
+import ast
 
 import networkx as nx
 import numpy as np
 import pandas as pd
+from sklearn.preprocessing import LabelEncoder
 
 
 class NEGARData:
@@ -18,30 +20,122 @@ class NEGARData:
         self.node_list: list[str] = []
         self.nodes: pd.Series = pd.Series(dtype=str)
         self.y_true: Optional[np.ndarray] = None
-        self.num_classes = df.Module.nunique()
+        self.label_encoder = None
+        self.num_classes = 0
 
         self._build_data()
+
+    def _parse_module_list(self, x):
+        if isinstance(x, list):
+            vals = x
+        elif pd.isna(x):
+            vals = []
+        else:
+            s = str(x).strip()
+            if not s:
+                vals = []
+            else:
+                try:
+                    vals = ast.literal_eval(s)
+                    if not isinstance(vals, (list, tuple, set)):
+                        vals = [vals]
+                except Exception:
+                    vals = [s]
+
+        out = []
+        for v in vals:
+            v = str(v).strip().lower()
+            if v and v not in {"nan", "none", "", "unmapped", "__none__"}:
+                out.append(v)
+        return sorted(set(out))
 
     def _build_data(self) -> None:
         if "File" not in self.df.columns:
             raise ValueError("df must contain a 'File' column.")
 
-        d = self.df
+        d = self.df.copy()
         d["File"] = d["File"].astype(str).str.strip()
-        d["Module"] = d["Module"].astype(str).str.strip() if "Module" in d.columns else "__none__"
+
+        # Preserve original file appearance order
+        file_order = pd.Index(pd.unique(d["File"]), name="File")
+
+        if "Module" in d.columns:
+            d["Module"] = (
+                d["Module"]
+                .astype(str)
+                .str.strip()
+                .str.lower()
+                .replace({"nan": None, "none": None, "": None, "unmapped": None, "__none__": None})
+            )
+        else:
+            d["Module"] = None
+
+        if "Module_List" in d.columns:
+            d["Module_List"] = d["Module_List"].apply(self._parse_module_list)
+        else:
+            d["Module_List"] = [[] for _ in range(len(d))]
+
+        d["Module_List"] = [
+            sorted(set(lst + ([mod] if mod is not None else [])))
+            for lst, mod in zip(d["Module_List"], d["Module"])
+        ]
+
+        vote_df = d.loc[d["Module"].notna(), ["File", "Module"]].copy()
+
+        if vote_df.empty:
+            exploded = d[["File", "Module_List"]].explode("Module_List").rename(
+                columns={"Module_List": "Module"}
+            )
+            exploded["Module"] = exploded["Module"].replace({"__none__": None})
+            vote_df = exploded.loc[exploded["Module"].notna(), ["File", "Module"]].copy()
 
         if self.use_majority_vote:
-            c = d.groupby(["File", "Module"]).size().reset_index(name="cnt")
+            c = vote_df.groupby(["File", "Module"], sort=False).size().reset_index(name="cnt")
             c = c.sort_values(["File", "cnt", "Module"], ascending=[True, False, True])
-            nodes_df = c.drop_duplicates("File", keep="first")[["File", "Module"]]
+            primary_df = c.drop_duplicates("File", keep="first")[["File", "Module"]]
         else:
-            nodes_df = d[["File", "Module"]].drop_duplicates("File")
+            primary_df = vote_df.drop_duplicates("File", keep="first")[["File", "Module"]]
+
+        primary_map = dict(zip(primary_df["File"], primary_df["Module"]))
+
+        nodes_df = (
+            d.groupby("File", sort=False, as_index=False)
+            .agg(
+                Module_List=("Module_List", lambda s: sorted(set(
+                    m for lst in s for m in lst if m is not None
+                )))
+            )
+        )
+
+        nodes_df = (
+            pd.DataFrame({"File": file_order})
+            .merge(nodes_df, on="File", how="left")
+        )
+
+        empty = nodes_df["Module_List"].isna() | (nodes_df["Module_List"].apply(len) == 0)
+        if empty.any():
+            nodes_df.loc[empty, "Module_List"] = [["__none__"]] * int(empty.sum())
+
+        nodes_df["Primary_Module"] = nodes_df["File"].map(primary_map)
+        nodes_df["Primary_Module"] = nodes_df.apply(
+            lambda r: r["Primary_Module"] if pd.notna(r["Primary_Module"]) else r["Module_List"][0],
+            axis=1,
+        )
+        nodes_df["Module"] = nodes_df["Primary_Module"]
+        nodes_df["Duplicated"] = nodes_df["Module_List"].apply(lambda x: len(x) > 1)
 
         self.df = nodes_df.reset_index(drop=True)
-        self.file_to_label = self.df.set_index("File")["Module"]
-        keep = set(self.file_to_label.index.tolist())
 
-        dep = self.df_dep
+        self.label_encoder = LabelEncoder()
+        self.df["Label"] = self.label_encoder.fit_transform(self.df["Primary_Module"].astype(str))
+        self.num_classes = len(self.label_encoder.classes_)
+
+        self.file_to_label = self.df.set_index("File")["Primary_Module"]
+
+        keep_list = self.df["File"].astype(str).tolist()
+        keep_set = set(keep_list)
+
+        dep = self.df_dep.copy()
         if dep is None or dep.empty:
             dep = pd.DataFrame(columns=["Source_File", "Target_File"])
 
@@ -52,19 +146,21 @@ class NEGARData:
         dep["Target_File"] = dep["Target_File"].astype(str).str.strip()
         dep = dep[dep["Source_File"] != dep["Target_File"]]
         dep = dep.drop_duplicates(subset=["Source_File", "Target_File"]).reset_index(drop=True)
-        dep = dep[dep["Source_File"].isin(keep) & dep["Target_File"].isin(keep)].reset_index(drop=True)
+        dep = dep[dep["Source_File"].isin(keep_set) & dep["Target_File"].isin(keep_set)].reset_index(drop=True)
 
         self.df_dep = dep
 
         G = nx.Graph()
-        G.add_nodes_from(sorted(keep))
+
+        G.add_nodes_from(keep_list)
+
         if not dep.empty:
-            G.add_edges_from(dep[["Source_File", "Target_File"]].itertuples(index=False, name=None))
+            G.add_edges_from(
+                dep[["Source_File", "Target_File"]].itertuples(index=False, name=None)
+            )
 
         self.G = G
-        self.node_list = list(G.nodes())
-        self.nodes = pd.Series(self.node_list, name="File")
 
-        y_str = self.file_to_label.loc[self.node_list].astype(str).tolist()
-        y_true, _ = pd.factorize(y_str)
-        self.y_true = y_true.astype(int)
+        self.node_list = keep_list
+        self.nodes = pd.Series(self.node_list, name="File")
+        self.y_true = self.df["Label"].to_numpy(dtype=int)
