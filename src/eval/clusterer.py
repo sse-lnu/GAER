@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, Dict, Iterable, List, Optional, Tuple
-
+from collections import Counter, defaultdict
 import numpy as np
 import pandas as pd
 from sklearn.cluster import AgglomerativeClustering, KMeans
@@ -165,24 +165,68 @@ class ClusterAndEval:
         if c == "kmeans":
             return self._best_k_elbow(X)
         raise ValueError(f"Unknown clustering='{clustering}'. Use 'kmeans' or 'ahc'.")
+
     def _eval(
         self,
         labels: np.ndarray,
         y_true: np.ndarray,
         nodes: List[str],
         deps: Optional[pd.DataFrame],
+        data,
     ) -> Dict[str, float]:
         preds, _ = pd.factorize(labels)
-        y = np.asarray(y_true)
+        y = np.asarray(y_true).copy()
+        out = {}
 
-        out = {
+        if (
+            hasattr(data, "df")
+            and isinstance(data.df, pd.DataFrame)
+            and "Duplicated" in data.df.columns
+            and "Module_List" in data.df.columns
+            and "Primary_Module" in data.df.columns
+            and hasattr(data, "label_encoder")
+            and data.label_encoder is not None
+        ):
+            module_lists = data.df["Module_List"].tolist()
+            duplicated = data.df["Duplicated"].astype(bool).to_numpy()
+            primary_modules = data.df["Primary_Module"].astype(str).str.lower().tolist()
+            enc_map = {cls: i for i, cls in enumerate(data.label_encoder.classes_)}
+
+            cluster_to_module = {}
+            for c in np.unique(preds):
+                idx = np.where(preds == c)[0]
+
+                counts = Counter(primary_modules[i] for i in idx if not duplicated[i])
+
+                if not counts:
+                    counts = Counter(primary_modules[i] for i in idx)
+
+                cluster_to_module[int(c)] = counts.most_common(1)[0][0]
+
+            # relax ground truth for duplicated files
+            if duplicated.any():
+                dup_idx = np.where(duplicated)[0]
+                hits = []
+
+                for i in dup_idx:
+                    pred_module = cluster_to_module[int(preds[i])]
+
+                    if pred_module in module_lists[i]:
+                        y[i] = enc_map[pred_module]
+                        hits.append(True)
+                    else:
+                        hits.append(False)
+
+                out["Duplicated_HitAny"] = 100.0 * float(np.mean(hits))
+
+        out.update({
             "MoJoFM": MoJoCalculator(preds, y, mode="array").mojofm(),
             "A2A": A2ACalculator(preds, y, mode="array").a2a(),
             "C2CCvg_10": C2CCoverage((nodes, preds), (nodes, y), mode="array").c2c_cvg(threshold=0.10),
             "C2CCvg_33": C2CCoverage((nodes, preds), (nodes, y), mode="array").c2c_cvg(threshold=0.33),
             "C2CCvg_50": C2CCoverage((nodes, preds), (nodes, y), mode="array").c2c_cvg(threshold=0.50),
             "ARI": float(adjusted_rand_score(y, preds)),
-        }
+        })
 
         if deps is not None and not deps.empty:
             d = deps.copy()
@@ -198,8 +242,9 @@ class ClusterAndEval:
                     normalized=True,
                 ).score()
             )
-        return out
 
+        return out
+    
     def run(
         self,
         data,
@@ -238,6 +283,6 @@ class ClusterAndEval:
             if y_true is None:
                 raise ValueError("do_eval=True but ground-truth not found (data.y_true or data.df['Label']).")
             deps = self._get_deps(data)
-            row.update(self._eval(labels, y_true, nodes, deps))
+            row.update(self._eval(labels, y_true, nodes, deps, data))
 
         return pd.DataFrame([row]), out
