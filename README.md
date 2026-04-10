@@ -72,4 +72,15 @@ The experiment runner produces:
 
 Outputs are written to the output directory (default: `results/`, or set via `--out_dir`).
 
+## License
+
+### Code
+This project’s source code is licensed under the BSD 3-Clause License.
+See `LICENSE` for details.
+
+### Data
+All data in the `data/` directory is dedicated to the public domain under CC0 1.0.
+See `LICENSE-DATA` for details.
+
+
 
