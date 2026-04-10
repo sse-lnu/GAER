@@ -4,7 +4,7 @@ RUN apk fix && apk --no-cache --update add git git-lfs
 
 WORKDIR /git
 RUN git lfs install
-RUN git clone https://github.com/doubleblindcode55/GAER.git
+RUN git clone https://github.com/sse-lnu/GAER.git
 
 FROM python:3.11.14-trixie
 RUN pip install --no-cache networkx==3.2.1 gensim==4.3.3 nltk==3.8.1 tqdm==4.66.5 pandas==2.2.3 node2vec==0.5.0 scikit-learn==1.4.1.post1 && \

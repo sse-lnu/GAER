@@ -18,8 +18,7 @@ Note that some of the datasets are large, so Git Large File Storage is required 
 
 
 ```bash
-
-git clone https://github.com/doubleblindcode55/GAER.git
+git clone https://github.com/sse-lnu/GAER.git
 
 cd GAER
 
