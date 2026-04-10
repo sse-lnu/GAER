@@ -1,0 +1,43 @@
+cff-version: 1.2.0
+title: "GAER: Graph Auto-Encoders for Unsupervised Software Architecture Recovery"
+message: "If you use this software, please cite the metadata below and the associated FSE 2026 paper if applicable."
+type: software
+authors:
+  - family-names: Jabeen
+    given-names: Rakhshanda
+    orcid: "0009-0002-0430-8179"
+  - family-names: Ericsson
+    given-names: Morgan
+    orcid: "0000-0003-1173-5187"
+  - family-names: Nordqvist
+    given-names: Jonas
+    orcid: "0000-0002-0510-6782"
+  - family-names: Wingkvist
+    given-names: Anna
+    orcid: "0000-0002-0835-823X"
+year: 2026
+license: BSD-3-Clause
+repository-code: "https://github.com/sse-lnu/GAER"
+url: "https://github.com/sse-lnu/GAER"
+abstract: "GAER is a graph auto-encoder framework for unsupervised software architecture recovery using graph-based learning techniques."
+keywords:
+  - graph-learning
+  - machine-learning
+  - software-architecture-recovery
+  - autoencoder
+  - unsupervised-learning
+version: 1.0.0
+references:
+  - type: article
+    title: "GAER: Graph Auto-Encoders for Unsupervised Software Architecture Recovery"
+    authors:
+      - family-names: Jabeen
+        given-names: Rakhshanda
+      - family-names: Ericsson
+        given-names: Morgan
+      - family-names: Nordqvist
+        given-names: Jonas
+      - family-names: Wingkvist
+        given-names: Anna
+    year: 2026
+    doi: "10.XXXX/fse.2026.GAER"
