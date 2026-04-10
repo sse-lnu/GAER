@@ -28,7 +28,7 @@ cd GAER
 
 We provide two ways to manage the required dependencies, via docker or pyproject.toml. Instructions for how to build and run the docker containers are available in `docker/`.
 
-We recommend that you use [uv](https://github.com/astral-sh/uv) if you want to manage the depdencies with the pyproject.toml. Note that we use NVIDIA CUDA by default. If you do not have access to an NVIDIA GPU, update the pyproject.toml to install CPU-versions of PyG and PyTorch.
+We recommend that you use [uv](https://github.com/astral-sh/uv) if you want to manage the depdencies with the pyproject.toml. Note that we use NVIDIA CUDA by default. If you do not have access to an NVIDIA GPU, update the pyproject.toml to install CPU-versions of PyG and PyTorch (instructions on what to change are available in the file)
 
 Here follows some examples on how you can run GAER and NEGAR. Note that these exampels work simiarly if you run via docker.
 
