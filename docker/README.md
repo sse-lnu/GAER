@@ -6,7 +6,21 @@ To make it as easy as possible to run GAER, NEGAR and SARIF, we include a set of
 
 The GAER and NEGAR Dockerfile requires CUDA and an NVIDIA GPU to run. Please ensure that you have, e.g., `docker` configured to use the NVIDIA toolkit so you can access the GPU from the container. You need to supply a directory for the results using the `-v` option. All the datasets are available in the image.
 
-To run it, use `docker run -it --rm --gpus all -v ./results:/gaer/results [some:tag]`. This will run NEGAR and GAER-GAT on all datasets and save the results to `results/` in your pwd. If you want to change the parameters, you can pass any of the allowed parameters after the `[some:tag]`. You can, e.g., use`docker run -it --rm --gpus all -v ./results:/gaer/results [some:tag] --pipeline gaer --encoder gcn` to run GAER-GCN on all datasets.
+To run it, use 
+
+```bash
+
+docker run -it --rm --gpus all -v ./results:/gaer/results [some:tag]
+```
+
+This will run NEGAR and GAER-GAT on all datasets and save the results to `results/` in your pwd. If you want to change the parameters, you can pass any of the allowed parameters after the `[some:tag]`. You can, e.g., use
+
+```bash
+
+docker run -it --rm --gpus all -v ./results:/gaer/results [some:tag] --pipeline gaer --encoder gcn
+```
+
+to run GAER-GCN on all datasets.
 
 For more information about which parameters are supporter, see `run_experiments.py` in `src/` or pass `--help` to the `docker run ...`
 
@@ -14,7 +28,19 @@ For more information about which parameters are supporter, see `run_experiments.
 
 The SARIF Dockerfile should run on any x86 system. The image contains everything from the SARIF repository, including a demo dataset. To run it on other datasets, you need to supply the source code and ground truth in the correct format. 
 
-To run SARIF on the demo dataset, distributed camera (HDC), use `docker run -it --rm -v ./results/:/sarif/Demo/results [some:tag] distributed_camera --gt distributed_camera_gt.json -o results`. If you want to run it on other datasets, put these in a local folder and and pass this as another `-v` and adjust the parameters. For example, if you have chromium in `./data`, you could run `docker run -it --rm -v ./data:/sarif/Demo/data -v ./results:/sarif/Demo/results [some:tag] data/chromium --gt data/chromium_gt.json -o results`.
+To run SARIF on the demo dataset, distributed camera (HDC), use 
+
+```bash 
+
+docker run -it --rm -v ./results/:/sarif/Demo/results [some:tag] distributed_camera --gt distributed_camera_gt.json -o results
+```
+
+If you want to run it on other datasets, put these in a local folder and and pass this as another `-v` and adjust the parameters. For example, if you have chromium in `./data`, you could run 
+
+```bash
+
+docker run -it --rm -v ./data:/sarif/Demo/data -v ./results:/sarif/Demo/results [some:tag] data/chromium --gt data/chromium_gt.json -o results
+```
 
 We used the following sources to find the source code. The following were found via the SARIF repository. 
 
