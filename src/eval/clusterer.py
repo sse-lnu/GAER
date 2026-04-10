@@ -379,7 +379,6 @@ class ClusterAndEval:
         out: Dict[str, Any] = {
             "labels": labels.tolist(),
             "k_used": int(k_used),
-            "k_search": diag_df,
         }
 
         if do_eval:
