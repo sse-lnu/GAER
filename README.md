@@ -156,9 +156,9 @@ For each dependency, we store the following. Note that many fields refer to enti
 The result is stored in a csv file with the following fields. Note that the files are named using the following pattern: `results_pipeline_date_time.csv`, e.g., `results_both_20260410_142229.csv`.
 
 - `Dataset`: The dataset used
-- `Clustering`: The clustering algorithm used
-- `k_used`: The K-value used for clustering (target number of clusters)
-- `Clusters`: The actual number of clusters
+- `Clustering_Algorithm`: The clustering algorithm used
+- `Recovered_clusters`: The K-value used for clustering (target number of clusters)
+- `GT_clusters`: The number of clusters in ground truth architecture
 - `Duplicated_HitAny`: 
 - `Duplicated_Adjusted`: 
 - `MoJoFM`: the metric value (not included if `--no_eval`)
