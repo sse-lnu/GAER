@@ -196,10 +196,8 @@ class ClusterAndEval:
 
         if c in {"ahc", "agg", "agglomerative"}:
             return self._best_k_elbow_ahc(X)
-
         if c == "kmeans":
             return self._best_k_elbow_kmeans(X)
-
         raise ValueError(f"Unknown clustering='{clustering}'. Use 'kmeans' or 'ahc'.")
 
     def _cluster_to_module_map(self, preds: np.ndarray, eval_df: pd.DataFrame, data) -> Dict[int, str]:
@@ -317,10 +315,7 @@ class ClusterAndEval:
             nodes=nodes,
             data=data,
         )
-
         out: Dict[str, float] = {}
-        out.update(extra)
-
         out.update(
             {
                 "MoJoFM": MoJoCalculator(preds, y_adj, mode="array").mojofm(),
@@ -371,14 +366,13 @@ class ClusterAndEval:
         labels = self._fit_labels(X, k_used, clustering)
 
         row: Dict[str, Any] = {
-            "Clustering": "KMeans" if str(clustering).lower() == "kmeans" else "Agglomerative",
-            "k_used": int(k_used),
-            "Clusters": int(len(np.unique(labels))),
+            "Clustering_Algorithm": "KMeans" if str(clustering).lower() == "kmeans" else "AHC",
+            "Recovered_clusters": int(k_used),
         }
 
         out: Dict[str, Any] = {
             "labels": labels.tolist(),
-            "k_used": int(k_used),
+            "Recovered_clusters": int(k_used),
         }
 
         if do_eval:
@@ -387,7 +381,7 @@ class ClusterAndEval:
                 raise ValueError(
                     "do_eval=True but ground-truth not found (data.y_true or data.df['Label'])."
                 )
-
+            row["GT_clusters"] = int(len(np.unique(y_true)))
             deps = self._get_deps(data)
             row.update(self._eval(labels, y_true, nodes, deps, data))
 
