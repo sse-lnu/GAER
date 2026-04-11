@@ -175,7 +175,6 @@ The result is stored in a csv file with the following fields. Note that the file
 - `Train_time(sec)`: ... to train
 - `Cluster_time(sec)`: ... to cluster
 - `Total_time(sec)`: The total time 
-- `Node2Vec_dim`: The dimensions used for node2vec in `NEGAR`. Empty for `GAER`
 
 If `--save_labels` is provided, a cluster assignment is saved in a labels file. This follows the same naming pattern as the results file. This file uses the JSON format and contains a key per pipeline and dataset, e.g., `NEGAR::Bash`. The key holds an object that contains `labels`, which is an array of labels for each entity, and `k_used`, which is the K used for clustering. Note that the labels are in the range `0...k_used-1`. 
 
