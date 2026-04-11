@@ -161,7 +161,7 @@ The result is stored in a csv file with the following fields. Note that the file
 - `GT_clusters`: The number of clusters in ground truth architecture
 - `MoJoFM`: the metric value (not included if `--no_eval`)
 - `A2A`:  the metric value (not included if `--no_eval`)
-- `C2CCvg_10`:  the C2C metric value under coverage threshold 0.10(not included if `--no_eval`)
+- `C2CCvg_10`:  the C2C metric value under coverage threshold 0.10 (not included if `--no_eval`)
 - `C2CCvg_33`:  the C2C metric value under coverage threshold 0.33 (not included if `--no_eval`)
 - `C2CCvg_50`:  the C2C metric value under coverage threshold 0.50 (not included if `--no_eval`)
 - `ARI`:  the metric value (not included if `--no_eval`)
