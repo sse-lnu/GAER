@@ -152,7 +152,6 @@ def run_negar_one(
 
     df_row.insert(0, "Dataset", name)
     df_row["Pipeline"] = "NEGAR"
-    df_row["Node2Vec_dim"] = n2v.dimensions
     df_row["build_data_time(sec)"] = round(t_build - t0, 4)
     df_row["Train_time(sec)"] = round(t_embed - t_build, 4)
     df_row["Cluster_time(sec)"] = round(t_cluster - t_embed, 4)
