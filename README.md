@@ -159,8 +159,6 @@ The result is stored in a csv file with the following fields. Note that the file
 - `Clustering_Algorithm`: The clustering algorithm used
 - `Recovered_clusters`: The K-value used for clustering (target number of clusters)
 - `GT_clusters`: The number of clusters in ground truth architecture
-- `Duplicated_HitAny`: 
-- `Duplicated_Adjusted`: 
 - `MoJoFM`: the metric value (not included if `--no_eval`)
 - `A2A`:  the metric value (not included if `--no_eval`)
 - `C2CCvg_10`:  the metric value (not included if `--no_eval`)
