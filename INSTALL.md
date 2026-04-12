@@ -56,10 +56,18 @@ Once you are sure it works, you try the following command to look at all availab
 uv run src/run_experiments.py --help
 ```
 
-You can also run the following to run all methods (GAER and NEGAR) on all datasets. Note that this can take some time, especially if running on a slower computer or without a GPU.
+You can also run the following to run all methods (GAER and NEGAR) on all datasets. Note that this can take some time, especially if running on a slower computer or without a GPU. The largest dataset, Chrome, took about 10 minutes for GAER and about 100 minutes for NEGAR on a (quite slow) two-core cloud vps. The same dataset took about 2 minutes for GAER and about 6 minutes for NEGAR on a M1 Max Macbook Pro. On an H100 NVIDIA GPU, GAER takes about 40 seconds on the Chrome dataset. A high-end consumer GPU (RTX 4090 or RTX 5090) has similar performance (for GAER). Note that NEGAR does not benefit from GPU acceleration, so expect 5-10 minutes when running on a recent desktop/server CPU. 
+
+If you do not have access to a GPU or a recent CPU, we recommend that you exclude Chrome. Running all datasets except Chrome takes about 15 minutes on the slow two-core cloud vps or about 1-2 minutes on the M1 Max Macbook Pro.
 
 ```bash
 uv run src/run_experiments.py --pipeline both --datasets all
+```
+
+or, if you want to skip Chrome.
+
+```bash
+uv run src/run_experiments.py --pipeline both --datasets AS4 Bash Hadoop HDF HDC OODT Jabref TeamMates Libxml
 ```
 
 For more information on the various options, the datasets and the output formats, please see the README.md file in the repository.
