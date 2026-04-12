@@ -9,7 +9,7 @@
 
 A permanent version of this artifact is archived at:
 
-DOI: https://doi.org/10.5281/zenodo.xxxxxxx
+DOI: https://doi.org/10.5281/zenodo.19534384
 
 If you use this artifact in your research, please cite the associated FSE 2026 paper.
 Citation information is provided in the [`CITATION.cff`](./CITATION.cff) file, which can be accessed via GitHub’s **“Cite this repository”** feature.
