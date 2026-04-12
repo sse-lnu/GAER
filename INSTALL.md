@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-The project provides two ways to install the dependencies: a `pyproject.toml` file and a Dockerfile. We recommend that you use `uv` and the `pyproject.toml`. If you want to use the Dockerfile, you need an Intel x86 platform (or emulation) to build the image and an NVIDIA GPU to run the container.
+The project provides two ways to install the dependencies: a `pyproject.toml` file and a Dockerfile. We recommend that you use `uv` and the `pyproject.toml`. If you want to use the Dockerfile, you need an Intel x86 platform (or emulation) to build the image. The provided Docker image is configured for CUDA and therefore requires an NVIDIA GPU to run. If a GPU is not available, we recommend using the `uv`-based installation with CPU-only dependencies instead.
 
 If you want to use CUDA, we assume that you have an NVIDIA GPU and that the drivers are working. You can verify this with, e.g., `nvidia-smi`.
 
@@ -22,7 +22,7 @@ The datasets are large and require large file support. Please refer to [https://
 
 ## Installing
 
-Everything needed to run the artifact is available in the repository, so simply clone https://github.com/sse-lnu/GAER.git .
+Everything needed to run the artifact is available in the repository. Simply clone it using:
 
 ```bash
 git clone https://github.com/sse-lnu/GAER.git
@@ -42,15 +42,14 @@ Use the following command to run our method, GAER, on the Bash dataset. Bash is 
 uv run src/run_experiments.py --pipeline gaer --datasets Bash --no_eval
 ```
 
-The script should produce a CSV file in the `results/` directory. The filename is printed to the console. Opening this file should reveal a single row of numeric values, confirming that the artifact is functioning correctly. The exact values may vary depending on the execution environment, but the structure should match the example below.
-
+The script should produce a CSV file in the `results/` directory. The filename is printed to the console. Opening this file should reveal a single row of numeric values, confirming that the artifact is functioning correctly. Below is an example what it could look like.
 
 ```csv
 Dataset,Clustering_Algorithm,Recovered_clusters,Pipeline,Encoder,GAE_loss,build_data_time(sec),Train_time(sec),Cluster_time(sec),Total_time(sec)
 Bash,AHC,16,GAER,gat,1.5752469301223755,0.7181,1.7719,0.1794,2.6694
 ```
 
-Once you are sure it works, you try the following command to look at all available options.
+Once you have verified that the installation works, you can run the following command to list all available options.
 
 ```bash
 uv run src/run_experiments.py --help
@@ -71,3 +70,10 @@ uv run src/run_experiments.py --pipeline both --datasets AS4 Bash Hadoop HDF HDC
 ```
 
 For more information on the various options, the datasets and the output formats, please see the README.md file in the repository.
+
+## Troubleshooting
+
+- **CUDA not detected:** Ensure that NVIDIA drivers are installed and verify using `nvidia-smi`.
+- **Datasets missing:** Run `git lfs pull` after cloning the repository.
+- **Docker GPU access:** Confirm that the NVIDIA Container Toolkit is installed and properly configured.
+- **uv command not found:** Ensure that `uv` is installed and available in your system PATH.
