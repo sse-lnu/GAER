@@ -19,6 +19,7 @@ year: 2026
 license: BSD-3-Clause
 repository-code: "https://github.com/sse-lnu/GAER"
 url: "https://github.com/sse-lnu/GAER"
+doi: "https://doi.org/10.5281/zenodo.19534384"
 abstract: "GAER is a graph auto-encoder framework for unsupervised software architecture recovery using graph-based learning techniques."
 keywords:
   - graph-learning
