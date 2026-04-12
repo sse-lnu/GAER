@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**GAER (Graph Auto-Encoders for Unsupervised Software Architecture Recovery)** is a research prototype that automatically reconstructs the modular architecture of software systems from their source code. The artifact accompanies the paper:
+**GAER (Graph Auto-Encoders for Unsupervised Software Architecture Recovery)** is a research prototype that automatically reconstructs the modular architecture of software systems from their source code. The artifact accompanies the paper (available as GAER.pdf):
 
 > *GAER: Graph Auto-Encoders for Unsupervised Software Architecture Recovery*,  
 > accepted at the ACM International Conference on the Foundations of Software Engineering (FSE) 2026.
