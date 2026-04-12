@@ -30,7 +30,7 @@ torch-spline-conv = [{ index = "pyg-t280-cu129" }]
 
 [[tool.uv.index]]
 name = "pytorch-cu129"
-# Change utl to https://download.pytorch.org/whl/cpu
+# Change url to https://download.pytorch.org/whl/cpu
 # to use CPU instead of GPU
 url ="https://download.pytorch.org/whl/cu129" 
 explicit = true
