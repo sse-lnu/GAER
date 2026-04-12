@@ -101,7 +101,7 @@ If `uv` does not work, make sure that you have the tool correctly set up. If it 
 
 We use `src/run_experiments.py` to start all the experiments. It supports a number of parameters to control which methods to run, which datasets to run them on, where the data is located, where the results are saved, and so on. We cover the most important ones below, please use the parameter `--help` to get the full list (or check the source code).
 
-Use `--pipeline` to run `gaer`, `negar`, or `both`. You can control which encoder is used for GAER with `--encoder` set to `gat` or `gcn`.
+Use `--pipeline` to run `gaer`, `negar`, or `both`. You can control which encoder is used for GAER with `--encoder` set to `gat` or `gcn`. `gat` is used by default.
 
 You control which datasets to run with `--datasets` and either `all` to run all datasets or a combination of the following to run specific datasets.
 - `AS4`
