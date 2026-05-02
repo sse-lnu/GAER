@@ -54,6 +54,7 @@ We used the following sources to find the source code. The following were found 
 In addition, we rely on Chromium from the Ubuntu source code package
 
 - Chromium: 23.0.1271 / svn-171054 [https://launchpad.net/ubuntu/+source/chromium-browser/23.0.1271.97-0ubuntu0.12.04.1](https://launchpad.net/ubuntu/+source/chromium-browser/23.0.1271.97-0ubuntu0.12.04.1)
+
 And Jabref and Teammates from the SAEroCon Repo:
 
 - Jabref 3.7: [https://github.com/sebastianherold/SAEroConRepo/tree/master/systems/JabRef](https://github.com/sebastianherold/SAEroConRepo/tree/master/systems/JabRef)
