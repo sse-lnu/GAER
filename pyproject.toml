@@ -3,12 +3,7 @@ name = "project"
 version = "0.1.0"
 requires-python = ">=3.11.11, <3.12"
 dependencies = [
-  "torch==2.8.0",
   "torch-geometric==2.7.0",
-  "torch-scatter==2.1.2",
-  "torch-sparse==0.6.18",
-  "torch-cluster==1.6.3",
-  "torch-spline-conv==1.2.2",
   "numpy==1.26.4",
   "pandas==2.2.3",
   "node2vec==0.5.0",
@@ -19,26 +14,72 @@ dependencies = [
   "tqdm==4.66.5",
 ]
 
-[tool.uv.sources]
-torch = [{ index = "pytorch-cu129" }]
-torchvision = [{ index = "pytorch-cu129" }]
+[project.optional-dependencies]
+cpu = [
+  "torch==2.8.0",
+  "torch-scatter==2.1.2",
+  "torch-sparse==0.6.18",
+  "torch-cluster==1.6.3",
+  "torch-spline-conv==1.2.2",
+]
 
-torch-scatter = [{ index = "pyg-t280-cu129" }]
-torch-sparse = [{ index = "pyg-t280-cu129" }]
-torch-cluster = [{ index = "pyg-t280-cu129" }]
-torch-spline-conv = [{ index = "pyg-t280-cu129" }]
+gpu = [
+  "torch==2.8.0",
+  "torch-scatter==2.1.2",
+  "torch-sparse==0.6.18",
+  "torch-cluster==1.6.3",
+  "torch-spline-conv==1.2.2",
+]
+
+[tool.uv]
+conflicts = [
+  [
+    { extra = "cpu" },
+    { extra = "gpu" },
+  ],
+]
+
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cpu", extra = "cpu" },
+  { index = "pytorch-cu129", extra = "gpu" },
+]
+
+torch-scatter = [
+  { index = "pyg-t280-cpu", extra = "cpu" },
+  { index = "pyg-t280-cu129", extra = "gpu" },
+]
+torch-sparse = [
+  { index = "pyg-t280-cpu", extra = "cpu" },
+  { index = "pyg-t280-cu129", extra = "gpu" },
+]
+torch-cluster = [
+  { index = "pyg-t280-cpu", extra = "cpu" },
+  { index = "pyg-t280-cu129", extra = "gpu" },
+]
+torch-spline-conv = [
+  { index = "pyg-t280-cpu", extra = "cpu" },
+  { index = "pyg-t280-cu129", extra = "gpu" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [[tool.uv.index]]
 name = "pytorch-cu129"
-# Change url to https://download.pytorch.org/whl/cpu
-# to use CPU instead of GPU
-url ="https://download.pytorch.org/whl/cu129" 
+url = "https://download.pytorch.org/whl/cu129"
+explicit = true
+
+[[tool.uv.index]]
+name = "pyg-t280-cpu"
+url = "https://data.pyg.org/whl/torch-2.8.0+cpu.html"
+format = "flat"
 explicit = true
 
 [[tool.uv.index]]
 name = "pyg-t280-cu129"
-# Change url to https://data.pyg.org/whl/torch-2.8.0+cpu.html
-# to use CPU instead of GPU.
 url = "https://data.pyg.org/whl/torch-2.8.0+cu129.html"
 format = "flat"
 explicit = true
