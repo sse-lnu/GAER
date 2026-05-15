@@ -83,3 +83,8 @@ name = "pyg-t280-cu129"
 url = "https://data.pyg.org/whl/torch-2.8.0+cu129.html"
 format = "flat"
 explicit = true
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.13",
+]

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from collections import Counter
-from typing import Dict, List, Optional, Tuple
+from typing import Optional
 
 import os
 import re
@@ -50,11 +49,19 @@ def infer_language_from_files(files: pd.Series) -> str:
 
 
 class HeterogeneousData(HeteroData):
-    def __init__(self, df: pd.DataFrame, df_dep: pd.DataFrame, w2v_params: Optional[dict] = None, max_df: float = 0.9):
+    def __init__(
+        self,
+        df: pd.DataFrame,
+        df_dep: pd.DataFrame,
+        w2v_params: Optional[dict] = None,
+        max_df: float = 0.9,
+    ):
         super().__init__()
         self.df = df.copy()
         self.df_dep = df_dep.copy()
-        self.w2v_params = w2v_params or dict(vector_size=100, window=5, min_count=5, sg=1, epochs=10, max_vocab_size=2000)
+        self.w2v_params = w2v_params or dict(
+            vector_size=100, window=5, min_count=5, sg=1, epochs=10, max_vocab_size=2000
+        )
         self.max_df = float(max_df)
 
         self.label_encoder = None
@@ -89,7 +96,13 @@ class HeterogeneousData(HeteroData):
             if "Member_Name" in df.columns:
                 code_map = (
                     df.groupby("File")["Member_Name"]
-                    .apply(lambda s: " ".join(sorted(set(str(x) for x in s if pd.notna(x) and str(x).strip()))))
+                    .apply(
+                        lambda s: " ".join(
+                            sorted(
+                                set(str(x) for x in s if pd.notna(x) and str(x).strip())
+                            )
+                        )
+                    )
                     .to_dict()
                 )
                 df["Code"] = df["File"].map(code_map).fillna("")
@@ -125,20 +138,25 @@ class HeterogeneousData(HeteroData):
         if "Module_List" in df.columns:
             df["Module_List"] = df["Module_List"].apply(parse_module_list)
             df["Module_List"] = df.apply(
-                lambda r: r["Module_List"] if len(r["Module_List"]) > 0
-                else ([r["Module"]] if r["Module"] is not None else []),
+                lambda r: (
+                    r["Module_List"]
+                    if len(r["Module_List"]) > 0
+                    else ([r["Module"]] if r["Module"] is not None else [])
+                ),
                 axis=1,
             )
         else:
-            df["Module_List"] = df["Module"].apply(lambda x: [x] if x is not None else [])
-
-        nodes = (
-            df.groupby("File", as_index=False)
-            .agg(
-                Code=("Code", "first"),
-                Entity=("Entity", "first"),
-                Module_List=("Module_List", lambda s: sorted(set(m for lst in s for m in lst if m is not None))),
+            df["Module_List"] = df["Module"].apply(
+                lambda x: [x] if x is not None else []
             )
+
+        nodes = df.groupby("File", as_index=False).agg(
+            Code=("Code", "first"),
+            Entity=("Entity", "first"),
+            Module_List=(
+                "Module_List",
+                lambda s: sorted(set(m for lst in s for m in lst if m is not None)),
+            ),
         )
 
         empty = nodes["Module_List"].apply(len) == 0
@@ -153,14 +171,26 @@ class HeterogeneousData(HeteroData):
         nodes["File_ID"] = np.arange(len(nodes), dtype=int)
         self.df = nodes
 
-        dep["Source_File"] = dep["Source_File"].astype(str).str.replace("\\", "/", regex=False)
-        dep["Target_File"] = dep["Target_File"].astype(str).str.replace("\\", "/", regex=False)
-        dep["Dependency_Count"] = pd.to_numeric(dep["Dependency_Count"], errors="coerce").fillna(1.0)
+        dep["Source_File"] = (
+            dep["Source_File"].astype(str).str.replace("\\", "/", regex=False)
+        )
+        dep["Target_File"] = (
+            dep["Target_File"].astype(str).str.replace("\\", "/", regex=False)
+        )
+        dep["Dependency_Count"] = pd.to_numeric(
+            dep["Dependency_Count"], errors="coerce"
+        ).fillna(1.0)
 
         valid_files = set(self.df["File"].astype(str))
-        dep = dep[dep["Source_File"].isin(valid_files) & dep["Target_File"].isin(valid_files)]
-        dep = dep[~dep["Dependency_Type"].str.contains("possible", case=False, na=False)]
-        dep = dep.groupby(["Source_File", "Target_File", "Dependency_Type"], as_index=False)["Dependency_Count"].sum()
+        dep = dep[
+            dep["Source_File"].isin(valid_files) & dep["Target_File"].isin(valid_files)
+        ]
+        dep = dep[
+            ~dep["Dependency_Type"].str.contains("possible", case=False, na=False)
+        ]
+        dep = dep.groupby(
+            ["Source_File", "Target_File", "Dependency_Type"], as_index=False
+        )["Dependency_Count"].sum()
 
         idx_map = dict(zip(self.df["File"].astype(str), self.df["File_ID"].astype(int)))
         dep["Source_ID"] = dep["Source_File"].map(idx_map)
@@ -172,10 +202,14 @@ class HeterogeneousData(HeteroData):
 
     def _create_node_features(self) -> None:
         files = self.df["File"].astype(str).str.replace("\\", "/", regex=False).tolist()
-        segs = {f: [s for s in "/".join(f.split("/")[:-1]).split("/") if s] for f in files}
+        segs = {
+            f: [s for s in "/".join(f.split("/")[:-1]).split("/") if s] for f in files
+        }
 
         firsts = [ss[0] for ss in segs.values() if ss]
-        common_root = firsts[0] if firsts and all(x == firsts[0] for x in firsts) else None
+        common_root = (
+            firsts[0] if firsts and all(x == firsts[0] for x in firsts) else None
+        )
 
         drop = {"src", "main", "java"}
         if common_root:
@@ -195,11 +229,14 @@ class HeterogeneousData(HeteroData):
                 out, seen = [], set()
                 for s in segs.get(f, []):
                     if s and s not in drop and s not in seen:
-                        out.append(s); seen.add(s)
+                        out.append(s)
+                        seen.add(s)
                 if out:
                     return out
 
-                toks = re.findall(r"[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z]+|[A-Z]+|\d+", base.lower())
+                toks = re.findall(
+                    r"[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z]+|[A-Z]+|\d+", base.lower()
+                )
                 return toks
 
             # --- C, C++ ---
@@ -215,23 +252,33 @@ class HeterogeneousData(HeteroData):
             out, seen = [], set()
             for t in toks:
                 if t and t not in drop and t not in seen:
-                    out.append(t); seen.add(t)
+                    out.append(t)
+                    seen.add(t)
             return out
 
         loc_texts = [" ".join(folder_tokens(f)) or "root" for f in files]
         self.df["Loc_features"] = loc_texts
-        loc_features = CountVectorizer(binary=True).fit_transform(loc_texts).toarray().astype(np.float32)
+        loc_features = (
+            CountVectorizer(binary=True)
+            .fit_transform(loc_texts)
+            .toarray()
+            .astype(np.float32)
+        )
 
         base = self.df[["Entity", "Code"]].copy()
         base["Entity"] = base["Entity"].astype(str)
         base["Code"] = base["Code"].fillna("").astype(str)
-        emb_map = W2VEmbeddingGenerator(base, max_df=self.max_df).generate(**self.w2v_params)
+        emb_map = W2VEmbeddingGenerator(base, max_df=self.max_df).generate(
+            **self.w2v_params
+        )
 
         if emb_map:
             self._w2v_dim = next(iter(emb_map.values())).shape[0]
             zero = np.zeros(self._w2v_dim, dtype=np.float32)
 
-            code_features = np.vstack([emb_map.get(e, zero) for e in self.df["Entity"].astype(str)]).astype(np.float32)
+            code_features = np.vstack(
+                [emb_map.get(e, zero) for e in self.df["Entity"].astype(str)]
+            ).astype(np.float32)
             code_features = normalize(code_features, norm="l2").astype(np.float32)
 
             features = np.hstack([loc_features, code_features]).astype(np.float32)
@@ -245,14 +292,24 @@ class HeterogeneousData(HeteroData):
         all_modules = sorted({m for mods in self.df["Module_List"] for m in mods})
         self.label_encoder = LabelEncoder().fit(all_modules)
         self.num_classes = len(self.label_encoder.classes_)
-        self.df["Label"] = self.label_encoder.transform(self.df["Primary_Module"].astype(str))
+        self.df["Label"] = self.label_encoder.transform(
+            self.df["Primary_Module"].astype(str)
+        )
 
     def _create_edges(self) -> None:
         if self.df_dep.empty:
             self.relations = []
             return
-        self.relations = sorted(self.df_dep["Dependency_Type"].dropna().unique().tolist())
+        self.relations = sorted(
+            self.df_dep["Dependency_Type"].dropna().unique().tolist()
+        )
         for dep_type, g in self.df_dep.groupby("Dependency_Type"):
-            src = torch.tensor(g["Source_ID"].to_numpy(dtype=np.int64), dtype=torch.long)
-            tgt = torch.tensor(g["Target_ID"].to_numpy(dtype=np.int64), dtype=torch.long)
-            self["entity", str(dep_type), "entity"].edge_index = torch.stack([src, tgt], dim=0)
+            src = torch.tensor(
+                g["Source_ID"].to_numpy(dtype=np.int64), dtype=torch.long
+            )
+            tgt = torch.tensor(
+                g["Target_ID"].to_numpy(dtype=np.int64), dtype=torch.long
+            )
+            self["entity", str(dep_type), "entity"].edge_index = torch.stack(
+                [src, tgt], dim=0
+            )

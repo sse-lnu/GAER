@@ -10,7 +10,9 @@ from sklearn.preprocessing import LabelEncoder
 
 
 class NEGARData:
-    def __init__(self, df: pd.DataFrame, df_dep: pd.DataFrame, use_majority_vote: bool = True):
+    def __init__(
+        self, df: pd.DataFrame, df_dep: pd.DataFrame, use_majority_vote: bool = True
+    ):
         self.df = df.copy()
         self.df_dep = df_dep.copy()
         self.use_majority_vote = bool(use_majority_vote)
@@ -65,7 +67,15 @@ class NEGARData:
                 .astype(str)
                 .str.strip()
                 .str.lower()
-                .replace({"nan": None, "none": None, "": None, "unmapped": None, "__none__": None})
+                .replace(
+                    {
+                        "nan": None,
+                        "none": None,
+                        "": None,
+                        "unmapped": None,
+                        "__none__": None,
+                    }
+                )
             )
         else:
             d["Module"] = None
@@ -83,42 +93,55 @@ class NEGARData:
         vote_df = d.loc[d["Module"].notna(), ["File", "Module"]].copy()
 
         if vote_df.empty:
-            exploded = d[["File", "Module_List"]].explode("Module_List").rename(
-                columns={"Module_List": "Module"}
+            exploded = (
+                d[["File", "Module_List"]]
+                .explode("Module_List")
+                .rename(columns={"Module_List": "Module"})
             )
             exploded["Module"] = exploded["Module"].replace({"__none__": None})
-            vote_df = exploded.loc[exploded["Module"].notna(), ["File", "Module"]].copy()
+            vote_df = exploded.loc[
+                exploded["Module"].notna(), ["File", "Module"]
+            ].copy()
 
         if self.use_majority_vote:
-            c = vote_df.groupby(["File", "Module"], sort=False).size().reset_index(name="cnt")
+            c = (
+                vote_df.groupby(["File", "Module"], sort=False)
+                .size()
+                .reset_index(name="cnt")
+            )
             c = c.sort_values(["File", "cnt", "Module"], ascending=[True, False, True])
             primary_df = c.drop_duplicates("File", keep="first")[["File", "Module"]]
         else:
-            primary_df = vote_df.drop_duplicates("File", keep="first")[["File", "Module"]]
+            primary_df = vote_df.drop_duplicates("File", keep="first")[
+                ["File", "Module"]
+            ]
 
         primary_map = dict(zip(primary_df["File"], primary_df["Module"]))
 
-        nodes_df = (
-            d.groupby("File", sort=False, as_index=False)
-            .agg(
-                Module_List=("Module_List", lambda s: sorted(set(
-                    m for lst in s for m in lst if m is not None
-                )))
+        nodes_df = d.groupby("File", sort=False, as_index=False).agg(
+            Module_List=(
+                "Module_List",
+                lambda s: sorted(set(m for lst in s for m in lst if m is not None)),
             )
         )
 
-        nodes_df = (
-            pd.DataFrame({"File": file_order})
-            .merge(nodes_df, on="File", how="left")
+        nodes_df = pd.DataFrame({"File": file_order}).merge(
+            nodes_df, on="File", how="left"
         )
 
-        empty = nodes_df["Module_List"].isna() | (nodes_df["Module_List"].apply(len) == 0)
+        empty = nodes_df["Module_List"].isna() | (
+            nodes_df["Module_List"].apply(len) == 0
+        )
         if empty.any():
             nodes_df.loc[empty, "Module_List"] = [["__none__"]] * int(empty.sum())
 
         nodes_df["Primary_Module"] = nodes_df["File"].map(primary_map)
         nodes_df["Primary_Module"] = nodes_df.apply(
-            lambda r: r["Primary_Module"] if pd.notna(r["Primary_Module"]) else r["Module_List"][0],
+            lambda r: (
+                r["Primary_Module"]
+                if pd.notna(r["Primary_Module"])
+                else r["Module_List"][0]
+            ),
             axis=1,
         )
         nodes_df["Module"] = nodes_df["Primary_Module"]
@@ -127,7 +150,9 @@ class NEGARData:
         self.df = nodes_df.reset_index(drop=True)
 
         self.label_encoder = LabelEncoder()
-        self.df["Label"] = self.label_encoder.fit_transform(self.df["Primary_Module"].astype(str))
+        self.df["Label"] = self.label_encoder.fit_transform(
+            self.df["Primary_Module"].astype(str)
+        )
         self.num_classes = len(self.label_encoder.classes_)
 
         self.file_to_label = self.df.set_index("File")["Primary_Module"]
@@ -140,13 +165,19 @@ class NEGARData:
             dep = pd.DataFrame(columns=["Source_File", "Target_File"])
 
         if "Source_File" not in dep.columns or "Target_File" not in dep.columns:
-            raise ValueError("df_dep must contain 'Source_File' and 'Target_File' columns.")
+            raise ValueError(
+                "df_dep must contain 'Source_File' and 'Target_File' columns."
+            )
 
         dep["Source_File"] = dep["Source_File"].astype(str).str.strip()
         dep["Target_File"] = dep["Target_File"].astype(str).str.strip()
         dep = dep[dep["Source_File"] != dep["Target_File"]]
-        dep = dep.drop_duplicates(subset=["Source_File", "Target_File"]).reset_index(drop=True)
-        dep = dep[dep["Source_File"].isin(keep_set) & dep["Target_File"].isin(keep_set)].reset_index(drop=True)
+        dep = dep.drop_duplicates(subset=["Source_File", "Target_File"]).reset_index(
+            drop=True
+        )
+        dep = dep[
+            dep["Source_File"].isin(keep_set) & dep["Target_File"].isin(keep_set)
+        ].reset_index(drop=True)
 
         self.df_dep = dep
 

@@ -1,8 +1,9 @@
 import networkx as nx
 import copy
 
+
 class ReadOnlyCluster:
-    def __init__(self, name, entites = None):
+    def __init__(self, name, entites=None):
         self.name = name
         self.entities = set()
         if entites:
@@ -11,7 +12,7 @@ class ReadOnlyCluster:
 
     def add(self, e):
         self.entities.add(e)
-        
+
     def __len__(self):
         return len(self.entities)
 
@@ -33,14 +34,14 @@ class ReadOnlyArchitecture:
     def __len__(self):
         return len(self.entities)
 
-    def difference(self, e: set) -> 'ReadOnlyArchitecture':
+    def difference(self, e: set) -> "ReadOnlyArchitecture":
         result = copy.deepcopy(self)
         for k in result.entities.keys():
             result.entities[k].entities -= e
         return result
 
     @staticmethod
-    def read_rsf(fn) -> 'ReadOnlyArchitecture':
+    def read_rsf(fn) -> "ReadOnlyArchitecture":
         result = ReadOnlyArchitecture()
         with open(fn) as fp:
             for row in fp:
@@ -52,7 +53,7 @@ class ReadOnlyArchitecture:
         return result
 
     @staticmethod
-    def from_array(labels: list[int]) -> 'ReadOnlyArchitecture':
+    def from_array(labels: list[int]) -> "ReadOnlyArchitecture":
         result = ReadOnlyArchitecture()
         for idx, cluster_id in enumerate(labels):
             cid = str(cluster_id)
@@ -63,7 +64,7 @@ class ReadOnlyArchitecture:
             result.entity_location_map[entity_id] = result.entities[cid]
         return result
 
-                
+
 class MCFP:
     def __init__(self, src, tgt):
         self._balance(src, tgt)
@@ -72,48 +73,49 @@ class MCFP:
     def _balance(self, src, tgt):
         smaller = src if len(src) < len(tgt) else tgt
         for i in range(abs(len(src) - len(tgt))):
-            smaller.entities[f'dummy_{i}'] = ReadOnlyCluster(f'dummy_{i}')
+            smaller.entities[f"dummy_{i}"] = ReadOnlyCluster(f"dummy_{i}")
 
     def _solve(self, src, tgt):
         graph = self._make_graph(src, tgt)
 
-        graph.nodes['source']['demand'] = -len(src)
-        graph.nodes['sink']['demand'] = len(tgt)
-        nx.set_edge_attributes(graph, 1, 'capacity')
+        graph.nodes["source"]["demand"] = -len(src)
+        graph.nodes["sink"]["demand"] = len(tgt)
+        nx.set_edge_attributes(graph, 1, "capacity")
 
         fcost, fdict = nx.capacity_scaling(graph)
         self.cost = fcost
-        
+
     def _make_graph(self, src, tgt) -> nx.DiGraph:
         graph = nx.DiGraph()
-        graph.add_node('source')
-        graph.add_node('sink')
+        graph.add_node("source")
+        graph.add_node("sink")
         first_pass = True
         for k1, v1 in src.entities.items():
-            vert1 = f'source_202311111800_{k1}'
+            vert1 = f"source_202311111800_{k1}"
             graph.add_node(vert1)
-            graph.add_edge('source', vert1, weight=0)
-            
+            graph.add_edge("source", vert1, weight=0)
+
             for k2, v2 in tgt.entities.items():
                 cost = len(v1.entities ^ v2.entities)
                 if first_pass:
-                    vert2 = f'target_202311111800_{k2}'
+                    vert2 = f"target_202311111800_{k2}"
                     graph.add_node(vert2)
-                    graph.add_edge(vert2, 'sink', weight=0)
+                    graph.add_edge(vert2, "sink", weight=0)
                 graph.add_edge(vert1, vert2, weight=cost)
 
         first_pass = False
 
         return graph
 
+
 class A2ACalculator:
-    def __init__(self, src, tgt, mode='file'):
-        assert mode in ['file', 'array']
+    def __init__(self, src, tgt, mode="file"):
+        assert mode in ["file", "array"]
         self.mode = mode
-        if mode == 'file':
+        if mode == "file":
             self.source = ReadOnlyArchitecture.read_rsf(src)
             self.target = ReadOnlyArchitecture.read_rsf(tgt)
-        elif mode == 'array':
+        elif mode == "array":
             self.source = ReadOnlyArchitecture.from_array(src)
             self.target = ReadOnlyArchitecture.from_array(tgt)
 
@@ -134,7 +136,14 @@ class A2ACalculator:
         mcfp = MCFP(src_trimmed, tgt_trimmed)
         num_moved = mcfp.cost / 2
 
-        return num_cluster_diff + 2 * len(added_ents) + 2 * len(removed_ents) + num_moved
+        return (
+            num_cluster_diff + 2 * len(added_ents) + 2 * len(removed_ents) + num_moved
+        )
 
     def _denominator(self):
-        return len(self.source) + 2 * self.source.count_ents() + len(self.target) + 2 * self.target.count_ents()
+        return (
+            len(self.source)
+            + 2 * self.source.count_ents()
+            + len(self.target)
+            + 2 * self.target.count_ents()
+        )

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Dict, Hashable, List, Mapping, Optional, Tuple, Union
+from typing import Dict, Hashable, List, Mapping, Tuple, Union
 
 import pandas as pd
 
@@ -45,7 +45,9 @@ class TurboMQ:
         self.weight_col = weight_col
         self.ignore_self_loops = ignore_self_loops
         self.normalized = normalized
-        self.df_deps = df_deps.groupby([source_col, target_col], as_index=False)[weight_col].sum()
+        self.df_deps = df_deps.groupby([source_col, target_col], as_index=False)[
+            weight_col
+        ].sum()
 
     def _labels_dict(self) -> Dict[NodeId, ClusterId]:
         if isinstance(self.labels_input, Mapping):
@@ -88,8 +90,8 @@ class TurboMQ:
             pair_w[(a, b)] += float(w)
 
         # Aggregate intra and inter-touch per cluster
-        intra_u: Dict[ClusterId, float] = defaultdict(float)     # μ_i
-        inter_touch: Dict[ClusterId, float] = defaultdict(float) # exdep_i (touching i)
+        intra_u: Dict[ClusterId, float] = defaultdict(float)  # μ_i
+        inter_touch: Dict[ClusterId, float] = defaultdict(float)  # exdep_i (touching i)
 
         for (a, b), w in pair_w.items():
             ca = lab[a]
@@ -110,5 +112,5 @@ class TurboMQ:
             if cf > 0:
                 total_cf += cf
         if self.normalized:
-            return (total_cf / k)*100 if k > 0 else 0.0
+            return (total_cf / k) * 100 if k > 0 else 0.0
         return total_cf

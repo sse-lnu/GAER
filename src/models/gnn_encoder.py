@@ -6,7 +6,15 @@ from torch_geometric.nn import GATConv, GCNConv, HeteroConv
 
 
 class GraphEncoder(nn.Module):
-    def __init__(self, relations, hidden=128, dropout=0.0, encoder="gat", add_self_loops=True, normalize=True):
+    def __init__(
+        self,
+        relations,
+        hidden=128,
+        dropout=0.0,
+        encoder="gat",
+        add_self_loops=True,
+        normalize=True,
+    ):
         super().__init__()
         ent_ent = [et for et in relations if et[0] == "entity" and et[2] == "entity"]
         if not ent_ent:
@@ -19,12 +27,16 @@ class GraphEncoder(nn.Module):
 
         if self.encoder == "gat":
             convs = {
-                et: GATConv((-1, -1), hidden, heads=1, concat=False, dropout=self.dropout)
+                et: GATConv(
+                    (-1, -1), hidden, heads=1, concat=False, dropout=self.dropout
+                )
                 for et in ent_ent
             }
         else:
             convs = {
-                et: GCNConv(-1, hidden, add_self_loops=add_self_loops, normalize=normalize)
+                et: GCNConv(
+                    -1, hidden, add_self_loops=add_self_loops, normalize=normalize
+                )
                 for et in ent_ent
             }
 
@@ -33,7 +45,10 @@ class GraphEncoder(nn.Module):
     def forward(self, x_dict, edge_index_dict):
         out = self.conv(x_dict, edge_index_dict)
         out = {k: F.elu(v) for k, v in out.items()}
-        out = {k: F.dropout(v, p=self.dropout, training=self.training) for k, v in out.items()}
+        out = {
+            k: F.dropout(v, p=self.dropout, training=self.training)
+            for k, v in out.items()
+        }
         return out
 
 

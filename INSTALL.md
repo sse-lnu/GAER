@@ -34,7 +34,11 @@ If you want to build the Docker containers, instructions and Dockerfiles are ava
 
 ## Running
 
-Note that the default configuration assumes the use of an NVIDIA GPU with CUDA support.  If a GPU is not available, the artifact can still be executed using CPU-only versions of PyTorch and PyTorch Geometric. To do so, edit the `pyproject.toml` file and replace the CUDA-specific dependencies with the CPU versions as indicated by the comments in the file.
+Note that the default configuration assumes the use of an NVIDIA GPU with CUDA support.  If a GPU is not available, the artifact can still be executed using CPU-only versions of PyTorch and PyTorch Geometric. Use `uv sync` and `--extra` followed by `cpu` or `gpu`, depending of which version of the dependencies you want to install. Note, you can also pass the `--extra` flag to `uv run`.
+
+```bash
+uv sync --extra gpu
+```
 
 Use the following command to run our method, GAER, on the Bash dataset. Bash is small, so even running on a slow CPU, the script should finish in a few seconds (but note that the dependencies will be installed the first time it is run, so that will add some extra time).  When the `--no_eval` flag is used, the output CSV contains a reduced set of fields focused on runtime information. Running the experiments without this flag will produce additional evaluation metrics such as MoJoFM, A2A, C2Ccvg, ARI, and TurboMQ_norm, as described in the README.
 

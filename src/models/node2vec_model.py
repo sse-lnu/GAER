@@ -16,7 +16,7 @@ class Node2VecModel:
     p: float = 1.0
     q: float = 1.0
     workers: int = 4
-    negative: int = 5   
+    negative: int = 5
 
     def fit_transform(self, data) -> np.ndarray:
         n2v = Node2Vec(
@@ -34,9 +34,9 @@ class Node2VecModel:
             min_count=1,
             sg=1,
             epochs=int(self.epochs),
-            negative=int(self.negative),  
-            hs=0,                         
-            workers=int(self.workers),  
+            negative=int(self.negative),
+            hs=0,
+            workers=int(self.workers),
         )
 
         return np.vstack([model.wv[n] for n in data.node_list]).astype(np.float32)

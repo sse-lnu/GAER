@@ -27,7 +27,11 @@ class ClusterAndEval:
         if hasattr(data, "nodes") and data.nodes is not None and len(data.nodes) == n:
             return [str(x) for x in list(data.nodes)]
 
-        if hasattr(data, "node_list") and data.node_list is not None and len(data.node_list) == n:
+        if (
+            hasattr(data, "node_list")
+            and data.node_list is not None
+            and len(data.node_list) == n
+        ):
             return [str(x) for x in list(data.node_list)]
 
         if (
@@ -41,7 +45,11 @@ class ClusterAndEval:
         return [str(i) for i in range(n)]
 
     def _get_y_true(self, data, n: int) -> Optional[np.ndarray]:
-        if hasattr(data, "y_true") and data.y_true is not None and len(data.y_true) == n:
+        if (
+            hasattr(data, "y_true")
+            and data.y_true is not None
+            and len(data.y_true) == n
+        ):
             return np.asarray(data.y_true, dtype=int)
 
         if (
@@ -200,18 +208,16 @@ class ClusterAndEval:
             return self._best_k_elbow_kmeans(X)
         raise ValueError(f"Unknown clustering='{clustering}'. Use 'kmeans' or 'ahc'.")
 
-    def _cluster_to_module_map(self, preds: np.ndarray, eval_df: pd.DataFrame, data) -> Dict[int, str]:
+    def _cluster_to_module_map(
+        self, preds: np.ndarray, eval_df: pd.DataFrame, data
+    ) -> Dict[int, str]:
         """
         Assign one predicted module label to each predicted cluster.
         We use majority vote over Primary_Module, preferring non-duplicated files.
         """
         duplicated = eval_df["Duplicated"].fillna(False).astype(bool).to_numpy()
         primary_modules = (
-            eval_df["Primary_Module"]
-            .astype(str)
-            .str.strip()
-            .str.lower()
-            .tolist()
+            eval_df["Primary_Module"].astype(str).str.strip().str.lower().tolist()
         )
 
         cluster_to_module: Dict[int, str] = {}
@@ -228,7 +234,9 @@ class ClusterAndEval:
 
             counts = pd.Series(vote_pool).value_counts()
             best_count = counts.max()
-            best_labels = sorted([lbl for lbl, cnt in counts.items() if cnt == best_count])
+            best_labels = sorted(
+                [lbl for lbl, cnt in counts.items() if cnt == best_count]
+            )
             cluster_to_module[int(c)] = best_labels[0]
 
         return cluster_to_module
@@ -259,7 +267,10 @@ class ClusterAndEval:
         if eval_df is None:
             return y, out
 
-        enc_map = {str(cls).strip().lower(): i for i, cls in enumerate(data.label_encoder.classes_)}
+        enc_map = {
+            str(cls).strip().lower(): i
+            for i, cls in enumerate(data.label_encoder.classes_)
+        }
 
         preds = np.asarray(preds, dtype=int)
         duplicated = eval_df["Duplicated"].fillna(False).astype(bool).to_numpy()
@@ -268,7 +279,11 @@ class ClusterAndEval:
         for val in eval_df["Module_List"].tolist():
             if isinstance(val, (list, tuple, set, np.ndarray, pd.Series)):
                 module_lists.append(
-                    [str(x).strip().lower() for x in val if pd.notna(x) and str(x).strip()]
+                    [
+                        str(x).strip().lower()
+                        for x in val
+                        if pd.notna(x) and str(x).strip()
+                    ]
                 )
             elif pd.isna(val):
                 module_lists.append([])
@@ -286,7 +301,11 @@ class ClusterAndEval:
                 pred_module = cluster_to_module.get(int(preds[i]))
                 allowed_modules = module_lists[i]
 
-                if pred_module is not None and pred_module in allowed_modules and pred_module in enc_map:
+                if (
+                    pred_module is not None
+                    and pred_module in allowed_modules
+                    and pred_module in enc_map
+                ):
                     y[i] = enc_map[pred_module]
                     hits.append(True)
                     adjusted += 1
@@ -320,9 +339,15 @@ class ClusterAndEval:
             {
                 "MoJoFM": MoJoCalculator(preds, y_adj, mode="array").mojofm(),
                 "A2A": A2ACalculator(preds, y_adj, mode="array").a2a(),
-                "C2CCvg_10": C2CCoverage((nodes, preds), (nodes, y_adj), mode="array").c2c_cvg(threshold=0.10),
-                "C2CCvg_33": C2CCoverage((nodes, preds), (nodes, y_adj), mode="array").c2c_cvg(threshold=0.33),
-                "C2CCvg_50": C2CCoverage((nodes, preds), (nodes, y_adj), mode="array").c2c_cvg(threshold=0.50),
+                "C2CCvg_10": C2CCoverage(
+                    (nodes, preds), (nodes, y_adj), mode="array"
+                ).c2c_cvg(threshold=0.10),
+                "C2CCvg_33": C2CCoverage(
+                    (nodes, preds), (nodes, y_adj), mode="array"
+                ).c2c_cvg(threshold=0.33),
+                "C2CCvg_50": C2CCoverage(
+                    (nodes, preds), (nodes, y_adj), mode="array"
+                ).c2c_cvg(threshold=0.50),
                 "ARI": float(adjusted_rand_score(y_adj, preds)),
             }
         )
@@ -366,7 +391,9 @@ class ClusterAndEval:
         labels = self._fit_labels(X, k_used, clustering)
 
         row: Dict[str, Any] = {
-            "Clustering_Algorithm": "KMeans" if str(clustering).lower() == "kmeans" else "AHC",
+            "Clustering_Algorithm": "KMeans"
+            if str(clustering).lower() == "kmeans"
+            else "AHC",
             "Recovered_clusters": int(k_used),
         }
 

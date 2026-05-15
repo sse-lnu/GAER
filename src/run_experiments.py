@@ -56,7 +56,9 @@ DEP_FILES = {
 }
 
 
-def _load_tables(data_dir: Path, names: List[str]) -> Tuple[Dict[str, pd.DataFrame], Dict[str, pd.DataFrame]]:
+def _load_tables(
+    data_dir: Path, names: List[str]
+) -> Tuple[Dict[str, pd.DataFrame], Dict[str, pd.DataFrame]]:
     datasets: Dict[str, pd.DataFrame] = {}
     deps: Dict[str, pd.DataFrame] = {}
 
@@ -93,7 +95,7 @@ def run_gaer_one(
 
     n_points = int(data.df.shape[0])
     if n_points < 100:
-        epochs = max(int(epochs), 50) 
+        epochs = max(int(epochs), 50)
         lr = max(float(lr), 1e-3)
 
     Z, logs = train_gae(
@@ -137,7 +139,9 @@ def run_negar_one(
 ) -> Tuple[pd.DataFrame, Dict]:
     t0 = time.perf_counter()
 
-    if hasattr(NEGARData, "from_tables") and callable(getattr(NEGARData, "from_tables")):
+    if hasattr(NEGARData, "from_tables") and callable(
+        getattr(NEGARData, "from_tables")
+    ):
         data = NEGARData.from_tables(df, df_dep, use_majority_vote=True)
     else:
         data = NEGARData(df, df_dep, use_majority_vote=True)
@@ -164,35 +168,161 @@ def run_negar_one(
 
 
 def main() -> None:
-    p = argparse.ArgumentParser()
-    p.add_argument("--data_dir", type=str, default="data")
-    p.add_argument("--pipeline", type=str, choices=["gaer", "negar", "both"], default="both")
-    p.add_argument("--datasets", nargs="*", default=["all"])
-    p.add_argument("--out_dir", type=str, default="results")
-    p.add_argument("--save_labels", action="store_true")
-    p.add_argument("--no_eval", action="store_true")
-    p.add_argument("--k_min", type=int, default=10)
-    p.add_argument("--k_max", type=int, default=30)
-    p.add_argument("--sample_size", type=int, default=2000)
-    p.add_argument("--user_k", type=int, default=None)
+    p = argparse.ArgumentParser(
+        description=(
+            "Run GAER and/or NEGAR clustering experiments on the built-in architecture "
+            "recovery datasets, then write timestamped CSV results and optional labels."
+        ),
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    p.add_argument(
+        "--data_dir",
+        type=str,
+        default="data",
+        help="Directory containing the dataset CSV files and matching *_deps.csv dependency files. Default: %(default)s.",
+    )
+    p.add_argument(
+        "--pipeline",
+        type=str,
+        choices=["gaer", "negar", "both"],
+        default="both",
+        help="Experiment pipeline to run: GAER graph autoencoder, NEGAR Node2Vec baseline, or both. Default: %(default)s.",
+    )
+    p.add_argument(
+        "--datasets",
+        nargs="*",
+        default=["all"],
+        help="Dataset names to run, or 'all'. Known names: AS4, Bash, Chrome, Hadoop, HDF, HDC, OODT, Jabref, TeamMates, Libxml. Default: all.",
+    )
+    p.add_argument(
+        "--out_dir",
+        type=str,
+        default="results",
+        help="Directory where timestamped result CSVs and optional label JSON files are written. Default: %(default)s.",
+    )
+    p.add_argument(
+        "--save_labels",
+        action="store_true",
+        help="Also write predicted cluster labels to a timestamped JSON file.",
+    )
+    p.add_argument(
+        "--no_eval",
+        action="store_true",
+        help="Skip ground-truth evaluation metrics; only cluster and report timing/k.",
+    )
+    p.add_argument(
+        "--k_min",
+        type=int,
+        default=10,
+        help="Minimum cluster count considered by elbow search when --user_k is not set. Default: %(default)s.",
+    )
+    p.add_argument(
+        "--k_max",
+        type=int,
+        default=30,
+        help="Maximum cluster count considered by elbow search when --user_k is not set. Default: %(default)s.",
+    )
+    p.add_argument(
+        "--sample_size",
+        type=int,
+        default=2000,
+        help="Maximum number of embeddings sampled for elbow-based k selection. Default: %(default)s.",
+    )
+    p.add_argument(
+        "--user_k",
+        type=int,
+        default=None,
+        help="Fixed number of clusters to recover; disables automatic elbow-based k selection.",
+    )
 
     # GAER defaults
-    p.add_argument("--encoder", type=str, choices=["gat", "gcn"], default="gat")
-    p.add_argument("--epochs", type=int, default=30)
-    p.add_argument("--hidden", type=int, default=128)
-    p.add_argument("--dropout", type=float, default=0.0)
-    p.add_argument("--lr", type=float, default=1e-4)
+    p.add_argument(
+        "--encoder",
+        type=str,
+        choices=["gat", "gcn"],
+        default="gat",
+        help="GAER graph encoder type used inside the graph autoencoder. Default: %(default)s.",
+    )
+    p.add_argument(
+        "--epochs",
+        type=int,
+        default=30,
+        help="Number of GAER training epochs. For datasets with fewer than 100 files, the script raises this to at least 50. Default: %(default)s.",
+    )
+    p.add_argument(
+        "--hidden",
+        type=int,
+        default=128,
+        help="Hidden embedding dimension for the GAER GNN encoder. Default: %(default)s.",
+    )
+    p.add_argument(
+        "--dropout",
+        type=float,
+        default=0.0,
+        help="Dropout probability used by the GAER encoder. Default: %(default)s.",
+    )
+    p.add_argument(
+        "--lr",
+        type=float,
+        default=1e-4,
+        help="GAER Adam learning rate. For datasets with fewer than 100 files, the script raises this to at least 1e-3. Default: %(default)s.",
+    )
 
     # NEGAR defaults
-    p.add_argument("--n2v_dim", type=int, default=128)
-    p.add_argument("--n2v_walk_length", type=int, default=30)
-    p.add_argument("--n2v_num_walks", type=int, default=200)
-    p.add_argument("--n2v_window", type=int, default=15)
-    p.add_argument("--n2v_epochs", type=int, default=5)
-    p.add_argument("--n2v_p", type=float, default=1.0)
-    p.add_argument("--n2v_q", type=float, default=1.0)
-    p.add_argument("--n2v_negative", type=int, default=5)
-    p.add_argument("--n2v_workers", type=int, default=4)
+    p.add_argument(
+        "--n2v_dim",
+        type=int,
+        default=128,
+        help="Node2Vec embedding dimension for NEGAR. Default: %(default)s.",
+    )
+    p.add_argument(
+        "--n2v_walk_length",
+        type=int,
+        default=30,
+        help="Length of each Node2Vec random walk. Default: %(default)s.",
+    )
+    p.add_argument(
+        "--n2v_num_walks",
+        type=int,
+        default=200,
+        help="Number of Node2Vec walks per node. For datasets over 5000 files, the script uses 100. Default: %(default)s.",
+    )
+    p.add_argument(
+        "--n2v_window",
+        type=int,
+        default=15,
+        help="Word2Vec context window size used to train Node2Vec embeddings. Default: %(default)s.",
+    )
+    p.add_argument(
+        "--n2v_epochs",
+        type=int,
+        default=5,
+        help="Word2Vec training epochs for Node2Vec walks. For datasets over 5000 files, the script uses 1. Default: %(default)s.",
+    )
+    p.add_argument(
+        "--n2v_p",
+        type=float,
+        default=1.0,
+        help="Node2Vec return parameter p; larger values discourage immediately revisiting the previous node. Default: %(default)s.",
+    )
+    p.add_argument(
+        "--n2v_q",
+        type=float,
+        default=1.0,
+        help="Node2Vec in/out parameter q; lower values bias walks outward, higher values bias local exploration. Default: %(default)s.",
+    )
+    p.add_argument(
+        "--n2v_negative",
+        type=int,
+        default=5,
+        help="Number of negative samples used by Word2Vec training. For datasets over 5000 files, the script uses 1. Default: %(default)s.",
+    )
+    p.add_argument(
+        "--n2v_workers",
+        type=int,
+        default=4,
+        help="Requested Node2Vec worker count. Values <= 0 choose an automatic safe count; all values are capped at min(4, CPU count - 1). Default: %(default)s.",
+    )
 
     args = p.parse_args()
 
@@ -201,7 +331,11 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     all_names = list(DATASET_FILES.keys())
-    names = all_names if (len(args.datasets) == 1 and args.datasets[0].lower() == "all") else args.datasets
+    names = (
+        all_names
+        if (len(args.datasets) == 1 and args.datasets[0].lower() == "all")
+        else args.datasets
+    )
     for n in names:
         if n not in DATASET_FILES:
             raise ValueError(f"Unknown dataset '{n}'. Known: {all_names}")

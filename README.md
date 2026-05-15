@@ -63,13 +63,17 @@ We have tested the artifact on macOS (CPU) and Linux (CPU and GPU).
 
 ### `pyproject.toml`
 
-We recommend that you use [uv](https://github.com/astral-sh/uv) to manage the dependencies. You can use `uv run` to automatically download the dependencies, create a temporary virtual environment, and run the program. 
+We recommend that you use [uv](https://github.com/astral-sh/uv) to manage the dependencies. You can use `uv sync` to automatically download the dependencies, create a temporary virtual environment, and run the program. Use the `--extra` parameter to specify whether `gpu` or `cpu` should be used. 
+
+```bash
+uv sync --extra gpu
+```
+
+You can then use `uv run` to run the `src/run_experiments.py` main program. 
 
 ```bash
 uv run src/run_experiments.py --pipeline gaer --datasets Bash
 ```
-
-The provided `pyproject.toml` assumes CUDA. If you want to use the CPU versions of the dependencies, you need to edit the file. We provide comments on where and what to change.
 
 ### Docker
 

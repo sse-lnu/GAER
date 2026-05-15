@@ -1,5 +1,6 @@
 import json
 
+
 class C2CCoverage:
     """
     Exact paper implementation of c2c_cvg:
@@ -11,7 +12,7 @@ class C2CCoverage:
     A = 'source' (first argument), B = 'target' (second argument).
     """
 
-    def __init__(self, source, target, mode='array'):
+    def __init__(self, source, target, mode="array"):
         self.source = source  # A  (predicted or whichever you choose as numerator base)
         self.target = target  # B  (the other architecture)
         self.mode = mode
@@ -22,28 +23,30 @@ class C2CCoverage:
         with open(path, encoding="utf-8", errors="ignore") as f:
             for line in f:
                 p = line.split()
-                if len(p) == 3 and p[0].lower() == 'contain':
-                    m[p[2]] = p[1]   # entity -> cluster
+                if len(p) == 3 and p[0].lower() == "contain":
+                    m[p[2]] = p[1]  # entity -> cluster
         return m
 
     def _parse_json(self, path):
         with open(path, encoding="utf-8") as f:
             data = json.load(f)
         mapping = {}
+
         def walk(node, group=None):
             if node.get("@type") == "group":
                 g = node.get("name")
-                for ch in (node.get("nested") or []):
+                for ch in node.get("nested") or []:
                     walk(ch, g)
             elif node.get("@type") == "item":
                 mapping[node.get("name")] = group
-        for top in (data.get("structure") or []):
+
+        for top in data.get("structure") or []:
             walk(top, top.get("name"))
         return mapping
 
     # ---------- inputs -> aligned label arrays ----------
     def _prepare_labels(self):
-        if self.mode == 'array':
+        if self.mode == "array":
             # supports (entities, labels) tuples on either side; else assumes aligned arrays
             def unpack(x):
                 if isinstance(x, tuple) and len(x) == 2:
@@ -55,9 +58,9 @@ class C2CCoverage:
             eB, yB = unpack(self.target)
 
             if eA is not None and eB is not None:
-                A = {e:l for e,l in zip(eA, yA)}
-                B = {e:l for e,l in zip(eB, yB)}
-                ents = [e for e in A if e in B]   # intersection (paper doesn’t pad)
+                A = {e: l for e, l in zip(eA, yA)}
+                B = {e: l for e, l in zip(eB, yB)}
+                ents = [e for e in A if e in B]  # intersection (paper doesn’t pad)
                 yA = [A[e] for e in ents]
                 yB = [B[e] for e in ents]
                 return yA, yB
@@ -65,10 +68,18 @@ class C2CCoverage:
             n = min(len(yA), len(yB))
             return yA[:n], yB[:n]
 
-        elif self.mode == 'file':
-            A = self._parse_json(self.source) if self.source.lower().endswith(".json") else self._parse_rsf(self.source)
-            B = self._parse_json(self.target) if self.target.lower().endswith(".json") else self._parse_rsf(self.target)
-            ents = [e for e in A if e in B]      # intersection (no padding)
+        elif self.mode == "file":
+            A = (
+                self._parse_json(self.source)
+                if self.source.lower().endswith(".json")
+                else self._parse_rsf(self.source)
+            )
+            B = (
+                self._parse_json(self.target)
+                if self.target.lower().endswith(".json")
+                else self._parse_rsf(self.target)
+            )
+            ents = [e for e in A if e in B]  # intersection (no padding)
             yA = [A[e] for e in ents]
             yB = [B[e] for e in ents]
             return yA, yB
@@ -104,12 +115,11 @@ class C2CCoverage:
                 count += 1
         return count
 
-
     # ---------- final metric ----------
     def c2c_cvg(self, threshold=0.50):
         yA, yB = self._prepare_labels()
-        A = self._clusters(yA)   # clusters of the FIRST architecture (denominator)
-        B = self._clusters(yB)   # clusters of the SECOND architecture
+        A = self._clusters(yA)  # clusters of the FIRST architecture (denominator)
+        B = self._clusters(yB)  # clusters of the SECOND architecture
         if not A:
             return 0.0
         simC = self._simC(A, B, threshold)

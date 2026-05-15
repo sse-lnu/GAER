@@ -8,7 +8,11 @@ from models.gnn_encoder import Adapter, GraphEncoder
 
 
 def merge_entity_edges(edge_index_dict, num_nodes, device):
-    parts = [ei for (et, ei) in edge_index_dict.items() if et[0] == "entity" and et[2] == "entity"]
+    parts = [
+        ei
+        for (et, ei) in edge_index_dict.items()
+        if et[0] == "entity" and et[2] == "entity"
+    ]
     if not parts:
         raise ValueError("No ('entity', *, 'entity') edges present.")
 
